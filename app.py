@@ -17,6 +17,13 @@ from slack_notifier import send_bulk_report, send_report
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
 
+def get_secret(key: str) -> str:
+    try:
+        return st.secrets[key]
+    except Exception:
+        return os.getenv(key, "")
+
+
 def analizar_pagina(page, img, modo, groq_key, gemini_key, modelo_gemini):
     if modo == "Reglas (sin IA)":
         rule_results = analizar_con_reglas(page)
@@ -84,8 +91,8 @@ if "analizado" not in st.session_state:
 if "nombres_pdf" not in st.session_state:
     st.session_state.nombres_pdf = []
 
-groq_key = os.getenv("GROQ_API_KEY", "")
-slack_url = os.getenv("SLACK_WEBHOOK_URL", "")
+groq_key = get_secret("GROQ_API_KEY")
+slack_url = get_secret("SLACK_WEBHOOK_URL")
 gemini_key = ""
 modelo_gemini = "gemini-2.0-flash-lite"
 
