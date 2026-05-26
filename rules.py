@@ -20,6 +20,24 @@ def analizar_con_reglas(page: fitz.Page) -> list[RuleResult]:
 
     resultados = []
 
+    # ── Clasificación de tipo de lámina ─────────────────────────────────────
+    # Detecta si la lámina es una planta o un tipo que no requiere norte.
+    _kw_no_planta = [
+        "CORTE", "SECCIÓN", "SECCION", "ELEVACIÓN", "ELEVACION",
+        "ALZADO", "FACHADA", "DETALLE", "AMPLIACIÓN", "AMPLIACION",
+        "PERSPECTIVA", "ISOMÉTRICO", "ISOMETRICO", "SECCIÓN TRANSVERSAL",
+        "SECCIÓN LONGITUDINAL", "PERFIL", "CUADRO DE SUPERFICIE",
+        "CUADRO DE RECINTOS", "TABLA DE", "SCHEDULE", "ESPECIFICACIONES",
+    ]
+    _kw_planta = [
+        "PLANTA", "FLOOR PLAN", "FLOOR", "LAYOUT",
+        "NIVEL", "PISO N", "PISO °", "NIVEL °",
+    ]
+    _match_no_planta = next((k for k in _kw_no_planta if k in texto), None)
+    _match_planta    = next((k for k in _kw_planta    if k in texto), None)
+    # Si hay indicador explícito de no-planta y ninguno de planta → no aplica norte
+    _es_no_planta = bool(_match_no_planta) and not bool(_match_planta)
+
     # ── REGLA 1: Escala numérica ────────────────────────────────────────────
     # Busca patrones como 1:50, 1:100, 1:200, ESC. 1:500
     patron_escala = re.search(r"1\s*[:]\s*\d{1,4}", texto_raw)
@@ -60,18 +78,26 @@ def analizar_con_reglas(page: fitz.Page) -> list[RuleResult]:
     ))
 
     # ── REGLA 4: Norte u orientación ────────────────────────────────────────
-    keywords_norte = ["NORTE", "NORTH", "↑N", "° N", "°N"]
-    tiene_norte_texto = any(k in texto for k in keywords_norte)
-    # También busca la letra N aislada cerca de bordes (heurística)
-    n_aislada = bool(re.search(r"\bN\b", texto_raw))
-    resultados.append(RuleResult(
-        id="orientacion_norte",
-        nombre="Orientación / Norte",
-        presente=tiene_norte_texto or n_aislada,
-        observacion="Indicador de norte encontrado" if tiene_norte_texto else
-                    "Letra N aislada (posible norte)" if n_aislada else "Sin indicador de orientación",
-        confianza="alta" if tiene_norte_texto else "baja",
-    ))
+    if _es_no_planta:
+        resultados.append(RuleResult(
+            id="orientacion_norte",
+            nombre="Orientación / Norte",
+            presente=True,
+            observacion=f"No aplica — lámina tipo {_match_no_planta.title()}",
+            confianza="alta",
+        ))
+    else:
+        keywords_norte = ["NORTE", "NORTH", "↑N", "° N", "°N"]
+        tiene_norte_texto = any(k in texto for k in keywords_norte)
+        n_aislada = bool(re.search(r"\bN\b", texto_raw))
+        resultados.append(RuleResult(
+            id="orientacion_norte",
+            nombre="Orientación / Norte",
+            presente=tiene_norte_texto or n_aislada,
+            observacion="Indicador de norte encontrado" if tiene_norte_texto else
+                        "Letra N aislada (posible norte)" if n_aislada else "Sin indicador de orientación",
+            confianza="alta" if tiene_norte_texto else "baja",
+        ))
 
     # ── REGLA 5: Nombres de ambientes ───────────────────────────────────────
     # Nombres completos (con y sin tilde, con y sin 'N' de baño)

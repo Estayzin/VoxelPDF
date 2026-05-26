@@ -26,7 +26,7 @@ Criterios:
 - vineta_ubicacion: ¿La viñeta está en la esquina inferior derecha o borde derecho?
 - numero_lamina: ¿Se ve un código de lámina (L-01, A-101, PL-02, Sheet 3, etc.)?
 - escala_numerica: ¿Se indica la escala como 1:X (ej: 1:50, 1:100)?
-- orientacion_norte: ¿Hay símbolo de norte u orientación?
+- orientacion_norte: ¿Hay símbolo de norte u orientación? PRIMERO determina el tipo de lámina: si es un CORTE, ELEVACIÓN, ALZADO, FACHADA, DETALLE, PERSPECTIVA, CUADRO o TABLA (es decir, cualquier cosa que NO sea una planta/floor plan/layout), marca presente=true con observacion="No aplica — lámina tipo [tipo detectado]". Solo exige el norte en plantas arquitectónicas (planta, nivel, piso, layout).
 - nombres_ambientes: ¿Hay etiquetas que identifiquen espacios o recintos en el cuerpo del plano? En planimetría formal es muy común usar CÓDIGOS NUMÉRICOS tipo "1.1.3", "3.2.1", "2.1.1" (formato X.X.X) en lugar de nombres escritos — estos códigos referencian una tabla de recintos y son completamente válidos. También son válidos: nombres completos (DORMITORIO, BAÑO, COCINA, SALA, LIVING, COMEDOR, PASILLO, BODEGA, TERRAZA, HALL, OFICINA, GARAGE, VESTÍBULO, LOGIA, RECEPCIÓN); abreviaciones (DORM., HAB., BÑO., BOD., EST., SS.HH, WC); regionalismos (PIEZA, CUARTO, QUINCHO, BALCÓN, ESTAR). Marca presente=true si ves CUALQUIERA de estas formas distribuidas en el plano, priorizando la detección de códigos numéricos X.X.X que es el sistema más habitual en proyectos formales.
 - cotas_dimensiones: ¿Hay cotas numéricas de medidas en muros o espacios?
 - densidad_grafica: ¿El dibujo tiene líneas claras de muros y elementos arquitectónicos?
