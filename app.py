@@ -523,6 +523,17 @@ hr { border-color: var(--border) !important; }
   background: #00bcd4 !important;
   box-shadow: 0 0 18px rgba(0,212,255,.55) !important;
 }
+[data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stBaseButton-secondary"] span {
+  visibility: hidden;
+  font-size: 0 !important;
+}
+[data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stBaseButton-secondary"]::after {
+  content: "Subir o seleccionar archivo";
+  visibility: visible;
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  letter-spacing: .06em;
+}
 
 /* ── Botón de descarga Excel ── */
 [data-testid="stDownloadButton"] > button {
