@@ -616,7 +616,7 @@ gemini_key    = ""
 modelo_gemini = "gemini-2.0-flash-lite"
 
 # ── Sidebar: sólo configuración ────────────────────────────────────────────────
-_BIT_MINI = """<svg width="52" height="52" viewBox="0 0 90 105" fill="none" xmlns="http://www.w3.org/2000/svg">
+_BIT_MINI = """<svg width="88" height="88" viewBox="0 0 90 105" fill="none" xmlns="http://www.w3.org/2000/svg">
   <g class="bit-wrap">
     <polygon class="bit-face" points="45,4 75,28 15,28" fill="rgba(0,212,255,0.22)" stroke="#00d4ff" stroke-width="1.4" stroke-linejoin="round"/>
     <polygon points="75,28 45,4 82,52" fill="rgba(0,212,255,0.10)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
