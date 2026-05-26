@@ -718,6 +718,11 @@ with st.sidebar:
         st.session_state.nombres_pdf  = []
         st.session_state.checks_names = []
         st.rerun()
+    if st.button("Nueva sesión", use_container_width=True):
+        # Borra resultados Y archivos subidos (reset completo)
+        for _k in list(st.session_state.keys()):
+            del st.session_state[_k]
+        st.rerun()
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 _BIT_SVG = """
@@ -1053,7 +1058,9 @@ else:
     for _pname, _rlist in pdfs_grouped.items():
         _pct = int(sum(r["aprobados"]/r["total"] for r in _rlist) / len(_rlist) * 100)
         _dot = "🟢" if _pct >= 80 else "🟡" if _pct >= 50 else "🔴"
-        _tab_labels.append(f"{_dot} {_pname[:25]}")
+        _stem  = _pname.rsplit(".", 1)[0]   # sin extensión
+        _short = ("…" + _stem[-16:]) if len(_stem) > 18 else _stem
+        _tab_labels.append(f"{_dot} {_short}")
     _tabs = st.tabs(_tab_labels)
     for _tab, (_pname, _rlist) in zip(_tabs, pdfs_grouped.items()):
         with _tab:

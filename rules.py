@@ -22,7 +22,6 @@ def analizar_con_reglas(page: fitz.Page, nombre_archivo: str = "") -> list[RuleR
     resultados = []
 
     # ── Clasificación de tipo de lámina ─────────────────────────────────────
-    # Detecta si la lámina es una planta o un tipo que no requiere norte.
     _kw_no_planta = [
         "CORTE", "SECCIÓN", "SECCION", "ELEVACIÓN", "ELEVACION",
         "ALZADO", "FACHADA", "DETALLE", "AMPLIACIÓN", "AMPLIACION",
@@ -34,10 +33,26 @@ def analizar_con_reglas(page: fitz.Page, nombre_archivo: str = "") -> list[RuleR
         "PLANTA", "FLOOR PLAN", "FLOOR", "LAYOUT",
         "NIVEL", "PISO N", "PISO °", "NIVEL °",
     ]
+    # Planos MEP: tienen vista de planta pero no requieren nomenclatura de ambientes
+    _kw_mep = [
+        "CLIMATIZACIÓN", "CLIMATIZACION", "DUCTO", "HVAC",
+        "MECÁNICA", "MECANICA", "VENTILACIÓN", "VENTILACION",
+        "ELÉCTRICA", "ELECTRICA", "ELÉCTRICO", "ELECTRICO",
+        "ILUMINACIÓN", "ILUMINACION", "FUERZA", "TABLERO ELÉCTRICO",
+        "SANITARIA", "SANITARIO", "AGUA POTABLE", "ALCANTARILLADO",
+        "INCENDIO", "DETECCIÓN", "DETECCION", "SPRINKLER",
+        "TELECOMUNICACIONES", "GAS NATURAL", "RED DE GAS",
+        "INSTALACIÓN ELÉCTRICA", "INSTALACION ELECTRICA",
+        "PLOMERÍA", "PLOMERIA",
+    ]
     _match_no_planta = next((k for k in _kw_no_planta if k in texto), None)
     _match_planta    = next((k for k in _kw_planta    if k in texto), None)
-    # Si hay indicador explícito de no-planta y ninguno de planta → no aplica norte
-    _es_no_planta = bool(_match_no_planta) and not bool(_match_planta)
+    _match_mep       = next((k for k in _kw_mep       if k in texto), None)
+
+    # No-planta: corte/elevación/detalle sin keyword de planta ni MEP
+    _es_no_planta = bool(_match_no_planta) and not bool(_match_planta) and not bool(_match_mep)
+    # MEP: instalaciones con vista de planta — norte aplica, ambientes no aplica
+    _es_mep = bool(_match_mep)
 
     # ── REGLA 1: Escala numérica ────────────────────────────────────────────
     # Busca patrones como 1:50, 1:100, 1:200, ESC. 1:500
@@ -145,12 +160,14 @@ def analizar_con_reglas(page: fitz.Page, nombre_archivo: str = "") -> list[RuleR
         r"\bSS\.?HH\b",        # SS.HH / SSHH (servicios higiénicos)
         r"\bWC\b",             # WC
     ]
-    if _es_no_planta:
+    if _es_no_planta or _es_mep:
+        _tipo_label = _match_mep.title() if _es_mep else _match_no_planta.title()
+        _tipo_cat   = "plano MEP" if _es_mep else "lámina tipo"
         resultados.append(RuleResult(
             id="nombres_ambientes",
             nombre="Nomenclatura de ambientes",
             presente=True,
-            observacion=f"No aplica — lámina tipo {_match_no_planta.title()}",
+            observacion=f"No aplica — {_tipo_cat} {_tipo_label}",
             confianza="alta",
             no_aplica=True,
         ))
