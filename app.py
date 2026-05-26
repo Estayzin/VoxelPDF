@@ -882,55 +882,64 @@ if _analizar_btn and uploads:
     for upload in uploads:
         if _rate_limited:
             break
-        pdf_bytes   = upload.read()
-        doc         = fitz.open(stream=pdf_bytes, filetype="pdf")
+        # Envolver apertura del PDF también — un archivo corrupto no debe detener los demás
+        try:
+            pdf_bytes = upload.read()
+            doc       = fitz.open(stream=pdf_bytes, filetype="pdf")
+        except Exception as e:
+            st.error(f"No se pudo abrir **{upload.name}**: {e}")
+            continue
+
         total_pages = len(doc)
 
         with _prog_area.container():
             st.markdown(f"**Analizando:** {upload.name}")
             progress = st.progress(0, text="Iniciando...")
 
-        for i, num_pag in enumerate(range(1, total_pages + 1)):
-            progress.progress(i / total_pages, text=f"Página {num_pag}/{total_pages}...")
-            page = doc[num_pag - 1]
-            mat  = fitz.Matrix(dpi / 72, dpi / 72)
-            pix  = page.get_pixmap(matrix=mat)
-            img  = Image.open(io.BytesIO(pix.tobytes("png")))
-            del pix
+        try:
+            for i, num_pag in enumerate(range(1, total_pages + 1)):
+                progress.progress(i / total_pages, text=f"Página {num_pag}/{total_pages}...")
+                page = doc[num_pag - 1]
+                mat  = fitz.Matrix(dpi / 72, dpi / 72)
+                pix  = page.get_pixmap(matrix=mat)
+                img  = Image.open(io.BytesIO(pix.tobytes("png")))
+                del pix
 
-            try:
-                resultado, aprobados, total, checks_bool, rule_results = analizar_pagina(
-                    page, img, modo, groq_key, gemini_key, modelo_gemini, upload.name, min_contraste
-                )
-                img_buf = io.BytesIO()
-                img.save(img_buf, format="PNG")
-                del img
-                st.session_state.resultados.append({
-                    "pagina":      num_pag,
-                    "pdf_name":    upload.name,
-                    "resultado":   resultado,
-                    "aprobados":   aprobados,
-                    "total":       total,
-                    "checks_bool": checks_bool,
-                    "img_bytes":   img_buf.getvalue(),
-                    "rule_results": [
-                        {"id": r.id, "nombre": r.nombre, "presente": r.presente,
-                         "observacion": r.observacion, "confianza": r.confianza,
-                         "no_aplica": r.no_aplica}
-                        for r in rule_results
-                    ] if rule_results else None,
-                })
-            except groq_analyzer.GroqRateLimitError as e:
-                _prog_area.empty()
-                st.warning(
-                    f"⏳ **Límite de tokens Groq alcanzado** — {e}\n\n"
-                    f"El análisis se detuvo en página {num_pag} de **{upload.name}**. "
-                    f"Los resultados parciales anteriores están disponibles abajo."
-                )
-                _rate_limited = True
-                break
-            except Exception as e:
-                st.error(f"Error página {num_pag}: {e}")
+                try:
+                    resultado, aprobados, total, checks_bool, rule_results = analizar_pagina(
+                        page, img, modo, groq_key, gemini_key, modelo_gemini, upload.name, min_contraste
+                    )
+                    img_buf = io.BytesIO()
+                    img.save(img_buf, format="PNG")
+                    del img
+                    st.session_state.resultados.append({
+                        "pagina":      num_pag,
+                        "pdf_name":    upload.name,
+                        "resultado":   resultado,
+                        "aprobados":   aprobados,
+                        "total":       total,
+                        "checks_bool": checks_bool,
+                        "img_bytes":   img_buf.getvalue(),
+                        "rule_results": [
+                            {"id": r.id, "nombre": r.nombre, "presente": r.presente,
+                             "observacion": r.observacion, "confianza": r.confianza,
+                             "no_aplica": r.no_aplica}
+                            for r in rule_results
+                        ] if rule_results else None,
+                    })
+                except groq_analyzer.GroqRateLimitError as e:
+                    _prog_area.empty()
+                    st.warning(
+                        f"⏳ **Límite de tokens Groq alcanzado** — {e}\n\n"
+                        f"El análisis se detuvo en página {num_pag} de **{upload.name}**. "
+                        f"Los resultados parciales anteriores están disponibles abajo."
+                    )
+                    _rate_limited = True
+                    break
+                except Exception as e:
+                    st.error(f"Error página {num_pag} de {upload.name}: {e}")
+        finally:
+            doc.close()  # siempre liberar memoria del documento
 
             progress.progress((i + 1) / total_pages, text=f"Página {num_pag}/{total_pages} lista")
 
