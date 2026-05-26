@@ -169,15 +169,26 @@ def analizar_con_reglas(page: fitz.Page) -> list[RuleResult]:
     ))
 
     # ── REGLA 9: Densidad de texto (etiquetas) ──────────────────────────────
-    # Un plano bien etiquetado tiene muchos bloques de texto cortos distribuidos
-    bloques_texto = [b for b in bloques if b.get("type") == 0]
+    # Cuenta bloques de texto FUERA de la franja de viñeta (der./inf.).
+    # La viñeta sola puede sumar 5+ bloques en una lámina vacía, así que
+    # solo cuenta texto en la zona de dibujo (~82% ancho, ~88% alto).
+    _zona_texto = fitz.Rect(
+        rect.width * 0.02, rect.height * 0.02,
+        rect.width * 0.82, rect.height * 0.88,
+    )
+    bloques_texto = [
+        b for b in bloques
+        if b.get("type") == 0
+        and fitz.Rect(b["bbox"]).intersects(_zona_texto)
+        and fitz.Rect(b["bbox"]).get_area() > 0
+    ]
     n_bloques = len(bloques_texto)
     resultados.append(RuleResult(
         id="densidad_texto",
         nombre="Etiquetas y texto distribuido",
-        presente=n_bloques >= 5,
-        observacion=f"{n_bloques} bloques de texto detectados en la lámina",
-        confianza="alta" if n_bloques >= 10 else "media",
+        presente=n_bloques >= 4,
+        observacion=f"{n_bloques} bloques de texto en zona de dibujo (excl. viñeta)",
+        confianza="alta" if n_bloques >= 8 else "media",
     ))
 
     # ── REGLA 10: Contenido en zona de dibujo ───────────────────────────────
