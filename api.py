@@ -76,9 +76,22 @@ GROQ_KEY   = os.getenv("GROQ_API_KEY", "")
 GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
 SLACK_URL  = os.getenv("SLACK_WEBHOOK_URL", "")
 
-# Store temporal de uploads — clave: session_id, valor: lista de (filename, tmp_path)
+# Store temporal de uploads — clave: session_id, valor: (timestamp, lista de (filename, tmp_path))
 # Usa disco en vez de RAM para evitar OOM en el free tier de Render
-_uploads: dict[str, list[tuple[str, str]]] = {}
+import time as _time
+_uploads: dict[str, tuple[float, list[tuple[str, str]]]] = {}
+_SESSION_TTL = 600  # segundos — sesiones sin usar se limpian
+
+def _purge_expired_sessions() -> None:
+    now = _time.time()
+    expired = [sid for sid, (ts, _) in _uploads.items() if now - ts > _SESSION_TTL]
+    for sid in expired:
+        _, pdf_list = _uploads.pop(sid)
+        for _, tmp_path in pdf_list:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
 _IMG_MAX_W = 900   # px — ancho máximo de preview
 _IMG_QUALITY = 78  # JPEG quality para los previews
@@ -148,6 +161,7 @@ def get_checks():
 @app.post("/api/upload")
 async def upload_files(files: List[UploadFile] = File(...)):
     """Recibe los PDFs, los guarda en disco temporal y devuelve session_id inmediatamente."""
+    _purge_expired_sessions()
     session_id = str(uuid.uuid4())
     pdf_list = []
     total_pages = 0
@@ -159,10 +173,10 @@ async def upload_files(files: List[UploadFile] = File(...)):
         doc = fitz.open(stream=content, filetype="pdf")
         total_pages += len(doc)
         doc.close()
-        del content
+        del doc, content
         pdf_list.append((upload.filename, tmp.name))
     gc.collect()
-    _uploads[session_id] = pdf_list
+    _uploads[session_id] = (_time.time(), pdf_list)
     return {"session_id": session_id, "total_pages": total_pages, "files": len(pdf_list)}
 
 
@@ -264,40 +278,45 @@ def _process_page_file(pdf_name: str, tmp_path: str, page_num: int, dpi: int, mo
     """Procesa una sola página leyendo del archivo temporal en disco."""
     doc         = fitz.open(tmp_path)
     total_pages = len(doc)
-    page        = doc[page_num]
-    mat         = fitz.Matrix(dpi / 72, dpi / 72)
-    pix         = page.get_pixmap(matrix=mat)
-    img         = Image.open(io.BytesIO(pix.tobytes("png")))
-    pix         = None  # liberar pixmap
-
     try:
-        resultado, aprobados, total, checks_bool, rule_data = _analizar_pagina(page, img, mode)
-        result = {
-            "pdf_name":    pdf_name,
-            "pagina":      page_num + 1,
-            "total_pages": total_pages,
-            "aprobados":   aprobados,
-            "total":       total,
-            "pct":         int(aprobados / total * 100),
-            "resultado":   resultado,
-            "checks_bool": checks_bool,
-            "img_b64":     _img_to_b64(img),
-            "rule_results": rule_data,
-        }
-    except Exception as e:
-        result = {
-            "pdf_name":    pdf_name,
-            "pagina":      page_num + 1,
-            "total_pages": total_pages,
-            "error":       str(e),
-            "aprobados":   0,
-            "total":       len(CHECKS),
-            "pct":         0,
-        }
+        page      = doc[page_num]
+        mat       = fitz.Matrix(dpi / 72, dpi / 72)
+        pix       = page.get_pixmap(matrix=mat)
+        png_bytes = pix.tobytes("png")
+        del pix                                      # liberar pixmap inmediatamente
+        img = Image.open(io.BytesIO(png_bytes))
+        del png_bytes
+
+        try:
+            resultado, aprobados, total, checks_bool, rule_data = _analizar_pagina(page, img, mode)
+            img_b64 = _img_to_b64(img)
+            del img
+            return {
+                "pdf_name":    pdf_name,
+                "pagina":      page_num + 1,
+                "total_pages": total_pages,
+                "aprobados":   aprobados,
+                "total":       total,
+                "pct":         int(aprobados / total * 100),
+                "resultado":   resultado,
+                "checks_bool": checks_bool,
+                "img_b64":     img_b64,
+                "rule_results": rule_data,
+            }
+        except Exception as e:
+            del img
+            return {
+                "pdf_name":    pdf_name,
+                "pagina":      page_num + 1,
+                "total_pages": total_pages,
+                "error":       str(e),
+                "aprobados":   0,
+                "total":       len(CHECKS),
+                "pct":         0,
+            }
     finally:
         doc.close()
-        img.close() if hasattr(img, 'close') else None
-    return result
+        del doc
 
 
 def _sse(data: dict) -> str:
@@ -319,19 +338,25 @@ async def analyze_stream(payload: dict):
     if session_id not in _uploads:
         return JSONResponse({"error": "Sesión no encontrada. Sube los archivos primero con /api/upload."}, status_code=404)
 
-    pdf_list = _uploads.pop(session_id)
+    _, pdf_list = _uploads.pop(session_id)
     dpi = max(72, min(dpi, 300))
 
     async def generate():
-        # Contar páginas totales
-        total_pages = sum(
-            len(fitz.open(tmp_path)) for _, tmp_path in pdf_list
-        )
+        # Contar páginas — cerrar documentos explícitamente
+        total_pages = 0
+        for _, tmp_path in pdf_list:
+            doc = fitz.open(tmp_path)
+            total_pages += len(doc)
+            doc.close()
+            del doc
         processed = 0
 
         try:
             for pdf_name, tmp_path in pdf_list:
-                n_pages = len(fitz.open(tmp_path))
+                doc = fitz.open(tmp_path)
+                n_pages = len(doc)
+                doc.close()
+                del doc
                 for page_num in range(n_pages):
                     yield _sse({
                         "type":    "progress",
