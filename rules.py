@@ -74,19 +74,43 @@ def analizar_con_reglas(page: fitz.Page) -> list[RuleResult]:
     ))
 
     # ── REGLA 5: Nombres de ambientes ───────────────────────────────────────
-    ambientes = [
-        "DORMITORIO", "HABITACIÓN", "HABITACION", "BAÑO", "BANO", "COCINA",
-        "SALA", "LIVING", "COMEDOR", "PASILLO", "BODEGA", "ESTUDIO",
-        "GARAGE", "PATIO", "TERRAZA", "LOGIA", "HALL", "RECEPCIÓN",
+    # Nombres completos (con y sin tilde, con y sin 'N' de baño)
+    _ambientes_exactos = [
+        "DORMITORIO", "HABITACIÓN", "HABITACION", "BAÑO", "BANO", "BÑO",
+        "COCINA", "SALA", "LIVING", "COMEDOR", "PASILLO", "BODEGA",
+        "ESTUDIO", "ESCRITORIO", "GARAGE", "GARAJE", "PATIO", "TERRAZA",
+        "LOGIA", "HALL", "RECEPCIÓN", "RECEPCION", "LOBBY", "FOYER",
         "OFICINA", "ESTAR", "SERVICIO", "LAVANDERÍA", "LAVANDERIA",
-        "BEDROOM", "KITCHEN", "BATHROOM", "CORRIDOR",
+        "PIEZA", "CUARTO", "QUINCHO", "BALCÓN", "BALCON", "JARDÍN",
+        "JARDIN", "VESTÍBULO", "VESTIBULO", "CIRCULACIÓN", "CIRCULACION",
+        "SSHH", "BAÑOS", "BANOS", "DUCHA",
+        "BEDROOM", "KITCHEN", "BATHROOM", "CORRIDOR", "OFFICE", "DINING",
     ]
-    ambientes_encontrados = [a for a in ambientes if a in texto]
+    # Abreviaturas comunes en planos: DORM., DORM 1, HAB., BÑO., BOD., etc.
+    _patrones_abrev = [
+        r"\bDORM[\.\s]",       # DORM. / DORM 1 / DORM.2
+        r"\bHAB[\.\s]",        # HAB. / HAB 1
+        r"\bB[ÑN]O[\.\s]?",    # BÑO. / BNO / BÑO
+        r"\bBOD[\.\s]",        # BOD.
+        r"\bEST[\.\s]",        # EST. (estudio/estar)
+        r"\bVEST[\.\s]",       # VEST. (vestíbulo)
+        r"\bCOMED[\.\s]",      # COMED.
+        r"\bGAR[\.\s]",        # GAR. (garage)
+        r"\bLAV[\.\s]",        # LAV. (lavandería)
+        r"\bPAS[\.\s]",        # PAS. (pasillo)
+        r"\bTERR[\.\s]",       # TERR. (terraza)
+        r"\bSS\.?HH\b",        # SS.HH / SSHH (servicios higiénicos)
+        r"\bWC\b",             # WC
+    ]
+    ambientes_encontrados = [a for a in _ambientes_exactos if a in texto]
+    for pat in _patrones_abrev:
+        if re.search(pat, texto):
+            ambientes_encontrados.append(re.search(pat, texto).group().strip())
     resultados.append(RuleResult(
         id="nombres_ambientes",
         nombre="Nomenclatura de ambientes",
         presente=len(ambientes_encontrados) >= 1,
-        observacion=f"Ambientes: {', '.join(ambientes_encontrados[:5])}" if ambientes_encontrados
+        observacion=f"Ambientes: {', '.join(dict.fromkeys(ambientes_encontrados[:6]))}" if ambientes_encontrados
                     else "Sin nombres de ambientes reconocibles",
         confianza="alta" if len(ambientes_encontrados) >= 2 else "media",
     ))

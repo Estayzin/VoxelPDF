@@ -5,7 +5,7 @@ import io
 from groq import Groq
 from PIL import Image
 
-PROMPT = """Eres un revisor experto en planimetría arquitectónica. Analiza esta imagen y evalúa exactamente estos 10 elementos. Responde SOLO con este JSON:
+PROMPT = """Eres un revisor experto en planimetría arquitectónica latinoamericana (Chile, Colombia, Perú, México, Argentina). Analiza esta imagen y evalúa exactamente estos 10 elementos. En la observación incluye el texto exacto que encontraste. Responde SOLO con este JSON:
 
 {
   "vineta_keywords":   {"presente": true,  "observacion": "comentario breve"},
@@ -27,7 +27,7 @@ Criterios:
 - numero_lamina: ¿Se ve un código de lámina (L-01, A-101, PL-02, Sheet 3, etc.)?
 - escala_numerica: ¿Se indica la escala como 1:X (ej: 1:50, 1:100)?
 - orientacion_norte: ¿Hay símbolo de norte u orientación?
-- nombres_ambientes: ¿Hay etiquetas de ambientes (dormitorio, baño, cocina, sala, etc.)?
+- nombres_ambientes: ¿Hay AL MENOS UNA etiqueta que identifique un espacio o ambiente en el cuerpo del plano? Considera válido: nombres completos (DORMITORIO, BAÑO, COCINA, SALA, LIVING, COMEDOR, PASILLO, BODEGA, TERRAZA, PATIO, HALL, OFICINA, ESTUDIO, GARAGE, LOGIA, RECEPCIÓN, LOBBY, VESTÍBULO, LAVANDERÍA); abreviaciones frecuentes en planimetría (DORM., DORM 1, HAB., BÑO., BNO., BOD., EST., VEST., COMED., GAR., LAV., SS.HH, SSHH, WC); regionalismos latinoamericanos (PIEZA, CUARTO, QUINCHO, BALCÓN, ESTAR, ESCRITORIO, JARDIN). Marca presente=true si encuentras CUALQUIERA de estas etiquetas, incluso si es una sola y abreviada.
 - cotas_dimensiones: ¿Hay cotas numéricas de medidas en muros o espacios?
 - densidad_grafica: ¿El dibujo tiene líneas claras de muros y elementos arquitectónicos?
 - densidad_texto: ¿Hay texto distribuido en el plano (referencias, números, anotaciones)?
