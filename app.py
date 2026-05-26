@@ -558,6 +558,32 @@ hr { border-color: var(--border) !important; }
   box-shadow: 0 0 16px rgba(0,200,83,.4) !important;
 }
 
+/* ── Sidebar header ── */
+.vbim-sb-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 4px 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+}
+.vbim-sb-header-text { line-height: 1.25; }
+.vbim-sb-header-name {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #e0f0ff;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.vbim-sb-header-sub {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: .04em;
+  margin-top: 2px;
+}
+
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: var(--navy); }
@@ -579,7 +605,31 @@ gemini_key    = ""
 modelo_gemini = "gemini-2.0-flash-lite"
 
 # ── Sidebar: sólo configuración ────────────────────────────────────────────────
+_BIT_MINI = """<svg width="28" height="28" viewBox="0 0 90 105" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g class="bit-wrap">
+    <polygon class="bit-face" points="45,4 75,28 15,28" fill="rgba(0,212,255,0.22)" stroke="#00d4ff" stroke-width="1.4" stroke-linejoin="round"/>
+    <polygon points="75,28 45,4 82,52" fill="rgba(0,212,255,0.10)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
+    <polygon points="15,28 45,4 8,52" fill="rgba(0,212,255,0.18)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
+    <polygon points="15,28 75,28 82,52 45,68 8,52" fill="rgba(0,212,255,0.07)" stroke="#00d4ff" stroke-width="1.0" stroke-linejoin="round"/>
+    <polygon points="75,28 82,52 62,78" fill="rgba(0,212,255,0.15)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
+    <polygon points="15,28 8,52 28,78" fill="rgba(0,212,255,0.20)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
+    <polygon points="28,78 62,78 45,100" fill="rgba(0,212,255,0.14)" stroke="#00d4ff" stroke-width="1.2" stroke-linejoin="round"/>
+    <line class="bit-edge1" x1="15" y1="28" x2="45" y2="4" stroke="#00d4ff" stroke-width="2.4" stroke-linecap="round"/>
+    <line class="bit-edge2" x1="45" y1="4" x2="75" y2="28" stroke="#00d4ff" stroke-width="1.6" stroke-linecap="round"/>
+    <circle class="bit-top" cx="45" cy="4" r="3" fill="#00d4ff"/>
+  </g>
+</svg>"""
+
 with st.sidebar:
+    st.markdown(f"""
+    <div class="vbim-sb-header">
+      {_BIT_MINI}
+      <div class="vbim-sb-header-text">
+        <div class="vbim-sb-header-name">VoxelBIM</div>
+        <div class="vbim-sb-header-sub">Revisor de Planimetría</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
     st.markdown('<div class="vbim-sb-title">Configuración</div>', unsafe_allow_html=True)
     modo = st.radio(
         "Motor de análisis",
