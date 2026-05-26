@@ -552,7 +552,7 @@ with st.sidebar:
         index=1,
         label_visibility="collapsed",
     )
-    dpi = st.slider("Resolución (DPI)", 72, 300, 150, 24)
+    dpi = st.slider("Resolución (DPI)", 72, 300, 72, 24)
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 _BIT_SVG = """
