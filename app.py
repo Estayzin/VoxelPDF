@@ -117,33 +117,141 @@ html, body, .stApp {
   font-family: var(--sans) !important;
 }
 
-/* ── Header VoxelBIM ── */
-.vbim-header {
+/* ── Hero header ── */
+@keyframes scan-line {
+  0%   { top: 0%;   opacity: .7; }
+  80%  { top: 100%; opacity: .2; }
+  100% { top: 100%; opacity: 0;  }
+}
+@keyframes corner-blink { 0%,100%{opacity:.6} 50%{opacity:.15} }
+
+.vbim-hero {
+  position: relative;
+  overflow: hidden;
   background: var(--navy);
-  padding: 14px 24px;
-  min-height: 64px;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin: -1rem -1rem 2rem -1rem;
+  border-bottom: 1px solid var(--border);
+}
+/* blueprint minor grid */
+.vbim-hero-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,212,255,.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,.055) 1px, transparent 1px),
+    linear-gradient(rgba(0,212,255,.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,.018) 1px, transparent 1px);
+  background-size: 48px 48px, 48px 48px, 8px 8px, 8px 8px;
+  pointer-events: none;
+}
+/* animated scan line */
+.vbim-scan {
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: scan-line 3.6s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+/* corner registration marks */
+.vbim-corner {
+  position: absolute;
+  width: 18px; height: 18px;
+  animation: corner-blink 3.6s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+.vbim-corner::before,
+.vbim-corner::after {
+  content: '';
+  position: absolute;
+  background: var(--accent);
+}
+.vbim-corner::before { width: 100%; height: 1.5px; top: 0; left: 0; }
+.vbim-corner::after  { width: 1.5px; height: 100%; top: 0; left: 0; }
+.vbim-corner--tl { top: 14px; left: 14px; }
+.vbim-corner--tr { top: 14px; right: 14px; transform: scaleX(-1); }
+.vbim-corner--bl { bottom: 36px; left: 14px; transform: scaleY(-1); }
+.vbim-corner--br { bottom: 36px; right: 14px; transform: scale(-1); }
+/* decorative floor plan SVG (right side) */
+.vbim-hero-floorplan {
+  position: absolute;
+  right: -20px; top: 50%; transform: translateY(-50%);
+  opacity: .11;
+  pointer-events: none;
+}
+/* content row */
+.vbim-hero-content {
+  position: relative;
+  z-index: 3;
   display: flex;
   align-items: center;
-  gap: 14px;
-  border-bottom: 2px solid var(--accent);
-  box-shadow: 0 2px 20px rgba(0,212,255,.08);
-  margin: -1rem -1rem 1.5rem -1rem;
+  gap: 24px;
+  padding: 28px 32px 16px;
 }
-.vbim-htitle {
+.vbim-hero-title {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: clamp(15px, 2.2vw, 24px);
   font-weight: 700;
-  color: #e0f0ff;
-  letter-spacing: .05em;
+  color: #e8f4ff;
+  letter-spacing: .12em;
   text-transform: uppercase;
+  line-height: 1.15;
 }
-.vbim-hsub {
+.vbim-hero-title span { color: var(--accent); }
+.vbim-hero-sub {
   font-family: var(--mono);
   font-size: 10px;
   color: var(--muted);
-  margin-top: 2px;
-  letter-spacing: .03em;
+  margin-top: 6px;
+  letter-spacing: .06em;
 }
+.vbim-hero-tags {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.vbim-tag {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border: 1px solid rgba(0,212,255,.25);
+  border-radius: 3px;
+  color: rgba(0,212,255,.6);
+}
+/* bottom status bar */
+.vbim-hero-bar {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 32px;
+  border-top: 1px solid var(--border);
+  background: rgba(0,0,0,.18);
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: .1em;
+}
+.vbim-hero-bar-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  flex-shrink: 0;
+}
+.vbim-hero-bar-live { color: var(--green); font-weight: 700; }
+.vbim-hero-bar-sep  { color: var(--border); }
 /* ── BIT animations ── */
 @keyframes bit-pulse  { 0%,100%{opacity:.95} 50%{opacity:.15} }
 @keyframes bit-edge-a { 0%,100%{opacity:1;stroke-width:2.4} 45%{opacity:.1;stroke-width:.4} 65%{opacity:.9;stroke-width:2.0} }
@@ -431,7 +539,7 @@ with st.sidebar:
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 _BIT_SVG = """
-<svg width="36" height="36" viewBox="0 0 90 105" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="72" height="72" viewBox="0 0 90 105" fill="none" xmlns="http://www.w3.org/2000/svg">
   <g class="bit-wrap">
     <polygon class="bit-face" points="45,4 75,28 15,28" fill="rgba(0,212,255,0.22)" stroke="#00d4ff" stroke-width="1.4" stroke-linejoin="round"/>
     <polygon points="75,28 45,4 82,52" fill="rgba(0,212,255,0.10)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
@@ -454,12 +562,80 @@ _BIT_SVG = """
 </svg>
 """
 
+_FLOORPLAN_SVG = """
+<svg class="vbim-hero-floorplan" width="420" height="300"
+     viewBox="0 0 500 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- perimeter -->
+  <rect x="30" y="30" width="440" height="300" stroke="#00d4ff" stroke-width="3.5"/>
+  <!-- interior walls -->
+  <line x1="30"  y1="180" x2="210" y2="180" stroke="#00d4ff" stroke-width="2.5"/>
+  <line x1="210" y1="30"  x2="210" y2="330" stroke="#00d4ff" stroke-width="2.5"/>
+  <line x1="210" y1="150" x2="470" y2="150" stroke="#00d4ff" stroke-width="2.5"/>
+  <line x1="340" y1="150" x2="340" y2="330" stroke="#00d4ff" stroke-width="2.5"/>
+  <!-- door openings (gaps + arcs) -->
+  <path d="M 210 255 Q 240 255 240 285" stroke="#00d4ff" stroke-width="1.5" fill="none" stroke-dasharray="3 2"/>
+  <path d="M 130 180 Q 130 210 160 210" stroke="#00d4ff" stroke-width="1.5" fill="none" stroke-dasharray="3 2"/>
+  <!-- windows (dashed segments on perimeter) -->
+  <line x1="80"  y1="30"  x2="140" y2="30"  stroke="#00d4ff" stroke-width="4" stroke-dasharray="6 4"/>
+  <line x1="270" y1="30"  x2="360" y2="30"  stroke="#00d4ff" stroke-width="4" stroke-dasharray="6 4"/>
+  <line x1="30"  y1="70"  x2="30"  y2="130" stroke="#00d4ff" stroke-width="4" stroke-dasharray="6 4"/>
+  <!-- dimension lines -->
+  <line x1="30"  y1="15" x2="470" y2="15"   stroke="#00d4ff" stroke-width="1"/>
+  <line x1="30"  y1="10" x2="30"  y2="20"   stroke="#00d4ff" stroke-width="1"/>
+  <line x1="470" y1="10" x2="470" y2="20"   stroke="#00d4ff" stroke-width="1"/>
+  <line x1="485" y1="30" x2="485" y2="330"  stroke="#00d4ff" stroke-width="1"/>
+  <line x1="480" y1="30" x2="490" y2="30"   stroke="#00d4ff" stroke-width="1"/>
+  <line x1="480" y1="330" x2="490" y2="330" stroke="#00d4ff" stroke-width="1"/>
+  <!-- room codes -->
+  <text x="118" y="112" font-family="monospace" font-size="20" fill="#00d4ff" text-anchor="middle">1.1.1</text>
+  <text x="118" y="260" font-family="monospace" font-size="20" fill="#00d4ff" text-anchor="middle">1.1.2</text>
+  <text x="338" y="97"  font-family="monospace" font-size="20" fill="#00d4ff" text-anchor="middle">1.1.3</text>
+  <text x="273" y="250" font-family="monospace" font-size="20" fill="#00d4ff" text-anchor="middle">1.1.4</text>
+  <text x="405" y="250" font-family="monospace" font-size="20" fill="#00d4ff" text-anchor="middle">1.1.5</text>
+  <!-- north indicator -->
+  <circle cx="455" cy="58" r="16" stroke="#00d4ff" stroke-width="1.5"/>
+  <line x1="455" y1="46" x2="455" y2="36" stroke="#00d4ff" stroke-width="2.5"/>
+  <polygon points="455,44 451,56 455,52 459,56" fill="#00d4ff"/>
+  <text x="455" y="34" font-family="monospace" font-size="12" fill="#00d4ff" text-anchor="middle">N</text>
+  <!-- scale bar -->
+  <line x1="60" y1="348" x2="160" y2="348" stroke="#00d4ff" stroke-width="1.5"/>
+  <line x1="60" y1="344" x2="60"  y2="352" stroke="#00d4ff" stroke-width="1.5"/>
+  <line x1="160" y1="344" x2="160" y2="352" stroke="#00d4ff" stroke-width="1.5"/>
+  <text x="110" y="358" font-family="monospace" font-size="11" fill="#00d4ff" text-anchor="middle">ESC 1:50</text>
+</svg>
+"""
+
+_motor_tag = "Groq · IA" if "Groq" in modo else "Reglas"
+
 st.markdown(f"""
-<div class="vbim-header">
-  <div style="flex-shrink:0">{_BIT_SVG}</div>
-  <div>
-    <div class="vbim-htitle">Revisor de Planimetría</div>
-    <div class="vbim-hsub">Análisis de láminas PDF &nbsp;·&nbsp; Motor activo: {modo}</div>
+<div class="vbim-hero">
+  <div class="vbim-hero-grid"></div>
+  <div class="vbim-scan"></div>
+  <div class="vbim-corner vbim-corner--tl"></div>
+  <div class="vbim-corner vbim-corner--tr"></div>
+  <div class="vbim-corner vbim-corner--bl"></div>
+  <div class="vbim-corner vbim-corner--br"></div>
+  {_FLOORPLAN_SVG}
+  <div class="vbim-hero-content">
+    <div style="flex-shrink:0">{_BIT_SVG}</div>
+    <div>
+      <div class="vbim-hero-title">Revisor de <span>Planimetría</span></div>
+      <div class="vbim-hero-sub">Análisis automatizado de láminas PDF con inteligencia artificial</div>
+      <div class="vbim-hero-tags">
+        <span class="vbim-tag">VoxelBIM</span>
+        <span class="vbim-tag">{_motor_tag}</span>
+        <span class="vbim-tag">{dpi} DPI</span>
+        <span class="vbim-tag">PDF · Planimetría</span>
+      </div>
+    </div>
+  </div>
+  <div class="vbim-hero-bar">
+    <div class="vbim-hero-bar-dot"></div>
+    <span class="vbim-hero-bar-live">SISTEMA ACTIVO</span>
+    <span class="vbim-hero-bar-sep">│</span>
+    <span>VoxelBIM</span>
+    <span class="vbim-hero-bar-sep">·</span>
+    <span>Arquitectura · Datos · BIM</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
