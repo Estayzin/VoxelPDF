@@ -508,11 +508,20 @@ hr { border-color: var(--border) !important; }
   color: var(--muted) !important;
 }
 [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stBaseButton-secondary"] {
-  background: transparent !important;
-  border: 1px solid rgba(0,212,255,.35) !important;
-  color: var(--accent) !important;
+  background: var(--accent) !important;
+  border: none !important;
+  color: #000 !important;
   border-radius: 4px !important;
   font-size: 9px !important;
+  font-weight: 700 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+  width: 100% !important;
+  box-shadow: 0 0 10px rgba(0,212,255,.3) !important;
+}
+[data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stBaseButton-secondary"]:hover {
+  background: #00bcd4 !important;
+  box-shadow: 0 0 18px rgba(0,212,255,.55) !important;
 }
 
 /* ── Botón de descarga Excel ── */
