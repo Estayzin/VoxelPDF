@@ -5,6 +5,20 @@ import io
 from groq import Groq
 from PIL import Image
 
+
+class GroqRateLimitError(Exception):
+    """Se lanza cuando todos los modelos de Groq han agotado su límite de tokens."""
+    def __init__(self, msg, retry_after: str = ""):
+        super().__init__(msg)
+        self.retry_after = retry_after
+
+
+# Modelos con soporte de visión — se prueban en orden hasta encontrar uno disponible
+_VISION_MODELS = [
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "meta-llama/llama-4-maverick-17b-128e-instruct",
+]
+
 PROMPT = """Eres un revisor experto en planimetría arquitectónica latinoamericana (Chile, Colombia, Perú, México, Argentina). Analiza esta imagen y evalúa exactamente estos 10 elementos. En la observación incluye el texto exacto que encontraste. Responde SOLO con este JSON:
 
 {
@@ -59,27 +73,43 @@ def analyze_page(image: Image.Image, api_key: str, nombre_archivo: str = "") -> 
     if nombre_archivo:
         prompt += f"\n\nNombre del archivo PDF: «{nombre_archivo}». Úsalo como referencia adicional para numero_lamina (solo informativo, el check pasa/falla según lo visible en el plano)."
 
-    response = client.chat.completions.create(
-        model="meta-llama/llama-4-scout-17b-16e-instruct",
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
-                    {"type": "text", "text": prompt},
+    last_rate_limit: GroqRateLimitError | None = None
+
+    for model in _VISION_MODELS:
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
+                            {"type": "text", "text": prompt},
+                        ],
+                    }
                 ],
-            }
-        ],
-        temperature=0.1,
-        max_tokens=600,
-    )
+                temperature=0.1,
+                max_tokens=600,
+            )
+            text = response.choices[0].message.content.strip()
+            json_match = re.search(r"\{.*\}", text, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group())
+            raise ValueError(f"Respuesta inesperada de Groq ({model}): {text}")
 
-    text = response.choices[0].message.content.strip()
-    json_match = re.search(r"\{.*\}", text, re.DOTALL)
-    if json_match:
-        return json.loads(json_match.group())
+        except Exception as e:
+            err_str = str(e)
+            if "rate_limit_exceeded" in err_str or "429" in err_str:
+                m = re.search(r"try again in ([\d\w\.\s]+?)(?:\.|$)", err_str)
+                retry = m.group(1).strip() if m else "unos minutos"
+                last_rate_limit = GroqRateLimitError(
+                    f"Límite de tokens Groq agotado en {model} — intenta en {retry}.",
+                    retry_after=retry,
+                )
+                continue  # probar siguiente modelo
+            raise  # cualquier otro error se propaga inmediatamente
 
-    raise ValueError(f"Respuesta inesperada de Groq: {text}")
+    raise last_rate_limit  # todos los modelos agotados
 
 
 def calcular_puntaje(resultado: dict) -> tuple[int, int]:

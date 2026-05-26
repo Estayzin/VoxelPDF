@@ -870,8 +870,11 @@ if _analizar_btn and uploads:
         u.seek(0)
     st.session_state.checks_names = checks_names
 
-    _prog_area = st.empty()
+    _prog_area   = st.empty()
+    _rate_limited = False
     for upload in uploads:
+        if _rate_limited:
+            break
         pdf_bytes   = upload.read()
         doc         = fitz.open(stream=pdf_bytes, filetype="pdf")
         total_pages = len(doc)
@@ -910,6 +913,15 @@ if _analizar_btn and uploads:
                         for r in rule_results
                     ] if rule_results else None,
                 })
+            except groq_analyzer.GroqRateLimitError as e:
+                _prog_area.empty()
+                st.warning(
+                    f"⏳ **Límite de tokens Groq alcanzado** — {e}\n\n"
+                    f"El análisis se detuvo en página {num_pag} de **{upload.name}**. "
+                    f"Los resultados parciales anteriores están disponibles abajo."
+                )
+                _rate_limited = True
+                break
             except Exception as e:
                 st.error(f"Error página {num_pag}: {e}")
 
