@@ -191,8 +191,13 @@ html, body, .stApp {
   z-index: 3;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 24px;
   padding: 28px 32px 16px;
+  text-align: center;
+}
+.vbim-hero-tags {
+  justify-content: center;
 }
 .vbim-hero-title {
   font-family: var(--mono);
