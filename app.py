@@ -960,14 +960,17 @@ def _mostrar_paginas(res_pdf):
 
             if r["rule_results"]:
                 for rr in r["rule_results"]:
-                    icon = "✅" if rr["presente"] else "❌"
+                    _no_aplica = rr["observacion"].startswith("No aplica")
+                    icon = "⚠️" if _no_aplica else ("✅" if rr["presente"] else "❌")
                     conf = {"alta": "●", "media": "◐", "baja": "○"}.get(rr["confianza"], "")
                     st.markdown(f"{icon} {conf} **{rr['nombre']}**: {rr['observacion']}")
             else:
                 for c in CHECKS:
                     rv   = r["resultado"].get(c["id"], {})
-                    icon = "✅" if rv.get("presente") else "❌"
-                    st.markdown(f"{icon} **{c['nombre']}**: {rv.get('observacion', '')}")
+                    _obs = rv.get("observacion", "")
+                    _no_aplica = _obs.startswith("No aplica")
+                    icon = "⚠️" if _no_aplica else ("✅" if rv.get("presente") else "❌")
+                    st.markdown(f"{icon} **{c['nombre']}**: {_obs}")
                 resumen = r["resultado"].get("resumen", "")
                 if resumen:
                     st.caption(resumen)
