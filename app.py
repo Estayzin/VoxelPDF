@@ -28,7 +28,7 @@ def analizar_pagina(page, img, modo, groq_key, gemini_key, modelo_gemini, nombre
     if modo == "Reglas (sin IA)":
         rule_results = analizar_con_reglas(page, nombre_archivo)
         aprobados, total = calcular_puntaje_reglas(rule_results)
-        checks_bool = {r.nombre: 1 if r.presente else 0 for r in rule_results}
+        checks_bool = {r.nombre: (None if r.no_aplica else (1 if r.presente else 0)) for r in rule_results}
         resultado = {r.id: {"presente": r.presente, "observacion": r.observacion} for r in rule_results}
         resultado["resumen"] = f"{aprobados}/{total} checks por análisis de reglas"
         return resultado, aprobados, total, checks_bool, rule_results
@@ -38,7 +38,11 @@ def analizar_pagina(page, img, modo, groq_key, gemini_key, modelo_gemini, nombre
         else:
             resultado = gemini_analyzer.analyze_page(img, gemini_key, modelo_gemini)
         aprobados, total = gemini_analyzer.calcular_puntaje(resultado)
-        checks_bool = {c["nombre"]: 1 if resultado.get(c["id"], {}).get("presente") else 0 for c in CHECKS}
+        checks_bool = {
+            c["nombre"]: (None if resultado.get(c["id"], {}).get("observacion", "").startswith("No aplica")
+                          else (1 if resultado.get(c["id"], {}).get("presente") else 0))
+            for c in CHECKS
+        }
         return resultado, aprobados, total, checks_bool, None
 
 
@@ -61,8 +65,10 @@ def generar_grafico_resumen(resultados, checks_names, titulo):
     for i, val in enumerate(puntajes):
         axes[0].text(i, val + 2, f"{val}%", ha="center", fontsize=8)
 
-    checks_data = {name: [r["checks_bool"].get(name, 0) for r in resultados] for name in checks_names}
-    matrix = np.array([checks_data[n] for n in checks_names])
+    # None = N/A → 0.5 (se mostrará en amarillo neutro, distinto de rojo/verde)
+    checks_data = {name: [0.5 if r["checks_bool"].get(name) is None else r["checks_bool"].get(name, 0)
+                          for r in resultados] for name in checks_names}
+    matrix = np.array([checks_data[n] for n in checks_names], dtype=float)
     axes[1].imshow(matrix, cmap="RdYlGn", aspect="auto", vmin=0, vmax=1)
     axes[1].set_xticks(range(len(labels)))
     axes[1].set_xticklabels(labels, rotation=45, fontsize=8)
@@ -73,6 +79,7 @@ def generar_grafico_resumen(resultados, checks_names, titulo):
         handles=[
             mpatches.Patch(facecolor="#91cf60", label="Presente"),
             mpatches.Patch(facecolor="#d73027", label="Ausente"),
+            mpatches.Patch(facecolor="#ffffbf", label="No aplica"),
         ],
         loc="upper right", fontsize=8,
     )
@@ -849,7 +856,8 @@ if _analizar_btn and uploads:
                     "img_bytes":   img_buf.getvalue(),
                     "rule_results": [
                         {"id": r.id, "nombre": r.nombre, "presente": r.presente,
-                         "observacion": r.observacion, "confianza": r.confianza}
+                         "observacion": r.observacion, "confianza": r.confianza,
+                         "no_aplica": r.no_aplica}
                         for r in rule_results
                     ] if rule_results else None,
                 })
@@ -904,11 +912,12 @@ for r in resultados:
     }
     if r["rule_results"]:
         for rr in r["rule_results"]:
-            _row[rr["nombre"]] = "SI" if rr["presente"] else "NO"
+            _row[rr["nombre"]] = "N/A" if rr.get("no_aplica") else ("SI" if rr["presente"] else "NO")
     else:
         for c in CHECKS:
-            rv = r["resultado"].get(c["id"], {})
-            _row[c["nombre"]] = "SI" if rv.get("presente") else "NO"
+            rv  = r["resultado"].get(c["id"], {})
+            _obs = rv.get("observacion", "")
+            _row[c["nombre"]] = "N/A" if _obs.startswith("No aplica") else ("SI" if rv.get("presente") else "NO")
     _rows.append(_row)
 
 _df      = pd.DataFrame(_rows)

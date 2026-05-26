@@ -9,6 +9,7 @@ class RuleResult:
     presente: bool
     observacion: str
     confianza: str  # "alta" | "media" | "baja"
+    no_aplica: bool = False
 
 
 def analizar_con_reglas(page: fitz.Page, nombre_archivo: str = "") -> list[RuleResult]:
@@ -100,6 +101,7 @@ def analizar_con_reglas(page: fitz.Page, nombre_archivo: str = "") -> list[RuleR
             presente=True,
             observacion=f"No aplica — lámina tipo {_match_no_planta.title()}",
             confianza="alta",
+            no_aplica=True,
         ))
     else:
         keywords_norte = ["NORTE", "NORTH", "↑N", "° N", "°N"]
@@ -150,6 +152,7 @@ def analizar_con_reglas(page: fitz.Page, nombre_archivo: str = "") -> list[RuleR
             presente=True,
             observacion=f"No aplica — lámina tipo {_match_no_planta.title()}",
             confianza="alta",
+            no_aplica=True,
         ))
     else:
         ambientes_encontrados = [a for a in _ambientes_exactos if a in texto]
@@ -272,5 +275,6 @@ def analizar_con_reglas(page: fitz.Page, nombre_archivo: str = "") -> list[RuleR
 
 
 def calcular_puntaje_reglas(resultados: list[RuleResult]) -> tuple[int, int]:
-    aprobados = sum(1 for r in resultados if r.presente)
-    return aprobados, len(resultados)
+    aplicables = [r for r in resultados if not r.no_aplica]
+    aprobados  = sum(1 for r in aplicables if r.presente)
+    return aprobados, len(aplicables)

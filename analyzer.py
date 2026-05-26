@@ -75,8 +75,9 @@ def analyze_page(image: Image.Image, api_key: str, model: str = "gemini-2.0-flas
 
 
 def calcular_puntaje(resultado: dict) -> tuple[int, int]:
-    total = len(CHECKS)
-    aprobados = sum(
-        1 for c in CHECKS if resultado.get(c["id"], {}).get("presente", False)
-    )
-    return aprobados, total
+    aplicables = [
+        c for c in CHECKS
+        if not resultado.get(c["id"], {}).get("observacion", "").startswith("No aplica")
+    ]
+    aprobados = sum(1 for c in aplicables if resultado.get(c["id"], {}).get("presente", False))
+    return aprobados, len(aplicables)
