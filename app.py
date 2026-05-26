@@ -525,6 +525,8 @@ hr { border-color: var(--border) !important; }
   letter-spacing: .08em !important;
   text-transform: uppercase !important;
   width: 100% !important;
+  text-align: center !important;
+  justify-content: center !important;
   box-shadow: 0 0 10px rgba(0,212,255,.3) !important;
 }
 [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stBaseButton-secondary"]:hover {
