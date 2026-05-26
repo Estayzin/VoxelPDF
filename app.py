@@ -572,10 +572,10 @@ _FLOORPLAN_SVG = """
   <line x1="210" y1="30"  x2="210" y2="330" stroke="#00d4ff" stroke-width="2.5"/>
   <line x1="210" y1="150" x2="470" y2="150" stroke="#00d4ff" stroke-width="2.5"/>
   <line x1="340" y1="150" x2="340" y2="330" stroke="#00d4ff" stroke-width="2.5"/>
-  <!-- door openings (gaps + arcs) -->
+  <!-- door arcs -->
   <path d="M 210 255 Q 240 255 240 285" stroke="#00d4ff" stroke-width="1.5" fill="none" stroke-dasharray="3 2"/>
   <path d="M 130 180 Q 130 210 160 210" stroke="#00d4ff" stroke-width="1.5" fill="none" stroke-dasharray="3 2"/>
-  <!-- windows (dashed segments on perimeter) -->
+  <!-- windows -->
   <line x1="80"  y1="30"  x2="140" y2="30"  stroke="#00d4ff" stroke-width="4" stroke-dasharray="6 4"/>
   <line x1="270" y1="30"  x2="360" y2="30"  stroke="#00d4ff" stroke-width="4" stroke-dasharray="6 4"/>
   <line x1="30"  y1="70"  x2="30"  y2="130" stroke="#00d4ff" stroke-width="4" stroke-dasharray="6 4"/>
@@ -586,22 +586,21 @@ _FLOORPLAN_SVG = """
   <line x1="485" y1="30" x2="485" y2="330"  stroke="#00d4ff" stroke-width="1"/>
   <line x1="480" y1="30" x2="490" y2="30"   stroke="#00d4ff" stroke-width="1"/>
   <line x1="480" y1="330" x2="490" y2="330" stroke="#00d4ff" stroke-width="1"/>
-  <!-- room codes -->
-  <text x="118" y="112" font-family="monospace" font-size="20" fill="#00d4ff" text-anchor="middle">1.1.1</text>
-  <text x="118" y="260" font-family="monospace" font-size="20" fill="#00d4ff" text-anchor="middle">1.1.2</text>
-  <text x="338" y="97"  font-family="monospace" font-size="20" fill="#00d4ff" text-anchor="middle">1.1.3</text>
-  <text x="273" y="250" font-family="monospace" font-size="20" fill="#00d4ff" text-anchor="middle">1.1.4</text>
-  <text x="405" y="250" font-family="monospace" font-size="20" fill="#00d4ff" text-anchor="middle">1.1.5</text>
-  <!-- north indicator -->
+  <!-- room markers (circles instead of text) -->
+  <circle cx="118" cy="105" r="6" stroke="#00d4ff" stroke-width="1.5"/>
+  <circle cx="118" cy="255" r="6" stroke="#00d4ff" stroke-width="1.5"/>
+  <circle cx="338" cy="90"  r="6" stroke="#00d4ff" stroke-width="1.5"/>
+  <circle cx="273" cy="245" r="6" stroke="#00d4ff" stroke-width="1.5"/>
+  <circle cx="405" cy="245" r="6" stroke="#00d4ff" stroke-width="1.5"/>
+  <!-- north arrow (no text) -->
   <circle cx="455" cy="58" r="16" stroke="#00d4ff" stroke-width="1.5"/>
   <line x1="455" y1="46" x2="455" y2="36" stroke="#00d4ff" stroke-width="2.5"/>
   <polygon points="455,44 451,56 455,52 459,56" fill="#00d4ff"/>
-  <text x="455" y="34" font-family="monospace" font-size="12" fill="#00d4ff" text-anchor="middle">N</text>
-  <!-- scale bar -->
+  <!-- scale bar (no text) -->
   <line x1="60" y1="348" x2="160" y2="348" stroke="#00d4ff" stroke-width="1.5"/>
-  <line x1="60" y1="344" x2="60"  y2="352" stroke="#00d4ff" stroke-width="1.5"/>
-  <line x1="160" y1="344" x2="160" y2="352" stroke="#00d4ff" stroke-width="1.5"/>
-  <text x="110" y="358" font-family="monospace" font-size="11" fill="#00d4ff" text-anchor="middle">ESC 1:50</text>
+  <line x1="60" y1="343" x2="60"  y2="353" stroke="#00d4ff" stroke-width="1.5"/>
+  <line x1="110" y1="343" x2="110" y2="353" stroke="#00d4ff" stroke-width="1"/>
+  <line x1="160" y1="343" x2="160" y2="353" stroke="#00d4ff" stroke-width="1.5"/>
 </svg>
 """
 
