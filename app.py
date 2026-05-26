@@ -541,6 +541,9 @@ hr { border-color: var(--border) !important; }
 [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stBaseButton-secondary"]::after {
   content: "Subir archivo";
   visibility: visible;
+  display: block;
+  text-align: center;
+  width: 100%;
   font-size: 11px !important;
   font-weight: 700 !important;
   letter-spacing: .06em;
@@ -567,13 +570,15 @@ hr { border-color: var(--border) !important; }
 /* ── Sidebar header ── */
 .vbim-sb-header {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 16px 4px 14px;
+  gap: 6px;
+  padding: 18px 4px 16px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 14px;
+  text-align: center;
 }
-.vbim-sb-header-text { line-height: 1.25; }
+.vbim-sb-header-text { line-height: 1.25; text-align: center; }
 .vbim-sb-header-name {
   font-family: var(--mono);
   font-size: 12px;
@@ -611,7 +616,7 @@ gemini_key    = ""
 modelo_gemini = "gemini-2.0-flash-lite"
 
 # ── Sidebar: sólo configuración ────────────────────────────────────────────────
-_BIT_MINI = """<svg width="28" height="28" viewBox="0 0 90 105" fill="none" xmlns="http://www.w3.org/2000/svg">
+_BIT_MINI = """<svg width="52" height="52" viewBox="0 0 90 105" fill="none" xmlns="http://www.w3.org/2000/svg">
   <g class="bit-wrap">
     <polygon class="bit-face" points="45,4 75,28 15,28" fill="rgba(0,212,255,0.22)" stroke="#00d4ff" stroke-width="1.4" stroke-linejoin="round"/>
     <polygon points="75,28 45,4 82,52" fill="rgba(0,212,255,0.10)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
