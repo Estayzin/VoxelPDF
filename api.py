@@ -11,10 +11,13 @@ Uso como .exe (via main.py):
 """
 import asyncio
 import base64
+import gc
 import io
 import json
 import os
 import sys
+import tempfile
+import uuid
 
 import fitz
 from dotenv import load_dotenv
@@ -72,6 +75,10 @@ app.add_middleware(
 GROQ_KEY   = os.getenv("GROQ_API_KEY", "")
 GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
 SLACK_URL  = os.getenv("SLACK_WEBHOOK_URL", "")
+
+# Store temporal de uploads — clave: session_id, valor: lista de (filename, tmp_path)
+# Usa disco en vez de RAM para evitar OOM en el free tier de Render
+_uploads: dict[str, list[tuple[str, str]]] = {}
 
 _IMG_MAX_W = 900   # px — ancho máximo de preview
 _IMG_QUALITY = 78  # JPEG quality para los previews
@@ -136,6 +143,27 @@ def get_status():
 @app.get("/api/checks")
 def get_checks():
     return {"checks": CHECKS}
+
+
+@app.post("/api/upload")
+async def upload_files(files: List[UploadFile] = File(...)):
+    """Recibe los PDFs, los guarda en disco temporal y devuelve session_id inmediatamente."""
+    session_id = str(uuid.uuid4())
+    pdf_list = []
+    total_pages = 0
+    for upload in files:
+        content = await upload.read()
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+        tmp.write(content)
+        tmp.close()
+        doc = fitz.open(stream=content, filetype="pdf")
+        total_pages += len(doc)
+        doc.close()
+        del content
+        pdf_list.append((upload.filename, tmp.name))
+    gc.collect()
+    _uploads[session_id] = pdf_list
+    return {"session_id": session_id, "total_pages": total_pages, "files": len(pdf_list)}
 
 
 @app.post("/api/analyze")
@@ -232,60 +260,101 @@ def _process_page(pdf_name: str, pdf_bytes: bytes, page_num: int, dpi: int, mode
         }
 
 
+def _process_page_file(pdf_name: str, tmp_path: str, page_num: int, dpi: int, mode: str) -> dict:
+    """Procesa una sola página leyendo del archivo temporal en disco."""
+    doc         = fitz.open(tmp_path)
+    total_pages = len(doc)
+    page        = doc[page_num]
+    mat         = fitz.Matrix(dpi / 72, dpi / 72)
+    pix         = page.get_pixmap(matrix=mat)
+    img         = Image.open(io.BytesIO(pix.tobytes("png")))
+    pix         = None  # liberar pixmap
+
+    try:
+        resultado, aprobados, total, checks_bool, rule_data = _analizar_pagina(page, img, mode)
+        result = {
+            "pdf_name":    pdf_name,
+            "pagina":      page_num + 1,
+            "total_pages": total_pages,
+            "aprobados":   aprobados,
+            "total":       total,
+            "pct":         int(aprobados / total * 100),
+            "resultado":   resultado,
+            "checks_bool": checks_bool,
+            "img_b64":     _img_to_b64(img),
+            "rule_results": rule_data,
+        }
+    except Exception as e:
+        result = {
+            "pdf_name":    pdf_name,
+            "pagina":      page_num + 1,
+            "total_pages": total_pages,
+            "error":       str(e),
+            "aprobados":   0,
+            "total":       len(CHECKS),
+            "pct":         0,
+        }
+    finally:
+        doc.close()
+        img.close() if hasattr(img, 'close') else None
+    return result
+
+
 def _sse(data: dict) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 @app.post("/api/analyze/stream")
-async def analyze_stream(
-    files: List[UploadFile] = File(...),
-    mode: str = Form("groq"),
-    dpi: int = Form(150),
-):
-    """Endpoint SSE — emite progreso página a página en tiempo real."""
+async def analyze_stream(payload: dict):
+    """Endpoint SSE — recibe session_id del /api/upload y emite progreso en tiempo real."""
+    session_id = payload.get("session_id", "")
+    mode       = payload.get("mode", "groq")
+    dpi        = int(payload.get("dpi", 150))
+
     if mode == "groq" and not GROQ_KEY:
         return JSONResponse({"error": "GROQ_API_KEY no configurada en .env"}, status_code=400)
     if mode == "gemini" and not GEMINI_KEY:
         return JSONResponse({"error": "GEMINI_API_KEY no configurada en .env"}, status_code=400)
 
-    dpi = max(72, min(dpi, 300))
+    if session_id not in _uploads:
+        return JSONResponse({"error": "Sesión no encontrada. Sube los archivos primero con /api/upload."}, status_code=404)
 
-    # Leer todos los archivos antes de iniciar el stream
-    pdf_list: list[tuple[str, bytes]] = []
-    for upload in files:
-        content = await upload.read()
-        pdf_list.append((upload.filename, content))
+    pdf_list = _uploads.pop(session_id)
+    dpi = max(72, min(dpi, 300))
 
     async def generate():
         # Contar páginas totales
         total_pages = sum(
-            len(fitz.open(stream=c, filetype="pdf"))
-            for _, c in pdf_list
+            len(fitz.open(tmp_path)) for _, tmp_path in pdf_list
         )
         processed = 0
 
-        for pdf_name, content in pdf_list:
-            n_pages = len(fitz.open(stream=content, filetype="pdf"))
-            for page_num in range(n_pages):
-                # Evento de progreso antes de analizar
-                yield _sse({
-                    "type":    "progress",
-                    "current": processed,
-                    "total":   total_pages,
-                    "pdf":     pdf_name,
-                    "page":    page_num + 1,
-                })
+        try:
+            for pdf_name, tmp_path in pdf_list:
+                n_pages = len(fitz.open(tmp_path))
+                for page_num in range(n_pages):
+                    yield _sse({
+                        "type":    "progress",
+                        "current": processed,
+                        "total":   total_pages,
+                        "pdf":     pdf_name,
+                        "page":    page_num + 1,
+                    })
 
-                # Análisis en thread pool para no bloquear el event loop
-                result = await asyncio.to_thread(
-                    _process_page, pdf_name, content, page_num, dpi, mode
-                )
-                processed += 1
+                    result = await asyncio.to_thread(
+                        _process_page_file, pdf_name, tmp_path, page_num, dpi, mode
+                    )
+                    processed += 1
+                    yield _sse({"type": "page", "result": result})
+                    gc.collect()
+        finally:
+            # Limpiar archivos temporales
+            for _, tmp_path in pdf_list:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
 
-                # Evento con el resultado de la página
-                yield _sse({"type": "page", "result": result})
-
-        # Evento final
         yield _sse({
             "type":         "done",
             "checks_names": [c["nombre"] for c in CHECKS],
