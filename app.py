@@ -512,6 +512,9 @@ hr { border-color: var(--border) !important; }
   font-size: 10px !important;
   color: var(--muted) !important;
 }
+[data-testid="stSidebar"] [data-testid="stFileUploader"] small {
+  display: none !important;
+}
 [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stBaseButton-secondary"] {
   background: var(--accent) !important;
   border: none !important;
@@ -654,6 +657,7 @@ with st.sidebar:
         accept_multiple_files=True,
         label_visibility="collapsed",
     )
+    st.caption("Máx. 200 MB por archivo · Solo PDF")
 
     st.markdown('<div class="vbim-sb-title" style="margin-top:16px">Acciones</div>', unsafe_allow_html=True)
     if st.button("Limpiar resultados", use_container_width=True):
