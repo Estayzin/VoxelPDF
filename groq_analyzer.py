@@ -73,7 +73,7 @@ def analyze_page(image: Image.Image, api_key: str, nombre_archivo: str = "") -> 
     if nombre_archivo:
         prompt += f"\n\nNombre del archivo PDF: «{nombre_archivo}». Úsalo como referencia adicional para numero_lamina (solo informativo, el check pasa/falla según lo visible en el plano)."
 
-    last_rate_limit: GroqRateLimitError | None = None
+    last_rate_limit = None  # type: GroqRateLimitError
 
     for model in _VISION_MODELS:
         try:
