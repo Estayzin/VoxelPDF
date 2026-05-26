@@ -106,6 +106,14 @@ def analizar_con_reglas(page: fitz.Page) -> list[RuleResult]:
     for pat in _patrones_abrev:
         if re.search(pat, texto):
             ambientes_encontrados.append(re.search(pat, texto).group().strip())
+
+    # Códigos numéricos de recintos tipo X.X.X (ej: 1.1.3, 3.2.1).
+    # Requiere ≥2 ocurrencias para evitar confundir con números sueltos.
+    # El patrón excluye decimales de 2 cifras (2.50) y escalas (1:X).
+    _codigos_recinto = re.findall(r"\b\d{1,2}\.\d{1,2}\.\d{1,2}\b", texto_raw)
+    if len(_codigos_recinto) >= 2:
+        ambientes_encontrados.append(f"códigos {_codigos_recinto[0]}…")
+
     resultados.append(RuleResult(
         id="nombres_ambientes",
         nombre="Nomenclatura de ambientes",
