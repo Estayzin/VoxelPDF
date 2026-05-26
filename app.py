@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from analyzer import CHECKS
 import analyzer as gemini_analyzer
 import groq_analyzer
-from rules import analizar_con_reglas, calcular_puntaje_reglas, RuleResult
+from rules import analizar_con_reglas, calcular_puntaje_reglas, RuleResult, analizar_contraste
 from slack_notifier import send_bulk_report, send_report
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), override=True)
@@ -24,9 +24,12 @@ def get_secret(key: str) -> str:
         return os.getenv(key, "")
 
 
-def analizar_pagina(page, img, modo, groq_key, gemini_key, modelo_gemini, nombre_archivo=""):
+def analizar_pagina(page, img, modo, groq_key, gemini_key, modelo_gemini, nombre_archivo="", min_contraste=3.0):
+    contraste = analizar_contraste(page, img, min_contraste)
+
     if modo == "Reglas (sin IA)":
         rule_results = analizar_con_reglas(page, nombre_archivo)
+        rule_results.append(contraste)
         aprobados, total = calcular_puntaje_reglas(rule_results)
         checks_bool = {r.nombre: (None if r.no_aplica else (1 if r.presente else 0)) for r in rule_results}
         resultado = {r.id: {"presente": r.presente, "observacion": r.observacion} for r in rule_results}
@@ -37,6 +40,7 @@ def analizar_pagina(page, img, modo, groq_key, gemini_key, modelo_gemini, nombre
             resultado = groq_analyzer.analyze_page(img, groq_key, nombre_archivo)
         else:
             resultado = gemini_analyzer.analyze_page(img, gemini_key, modelo_gemini)
+        resultado["contraste_lectura"] = {"presente": contraste.presente, "observacion": contraste.observacion}
         aprobados, total = gemini_analyzer.calcular_puntaje(resultado)
         checks_bool = {
             c["nombre"]: (None if resultado.get(c["id"], {}).get("observacion", "").startswith("No aplica")
@@ -603,6 +607,35 @@ hr { border-color: var(--border) !important; }
   margin-top: 2px;
 }
 
+/* ── Dropzone principal ── */
+.vbim-main-drop [data-testid="stFileUploaderDropzone"] {
+  border: 2px dashed var(--accent) !important;
+  border-radius: 14px !important;
+  background: rgba(0,212,255,.04) !important;
+  min-height: 180px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: background .2s;
+}
+.vbim-main-drop [data-testid="stFileUploaderDropzone"]:hover {
+  background: rgba(0,212,255,.09) !important;
+}
+.vbim-main-drop [data-testid="stFileUploaderDropzone"] > div {
+  text-align: center !important;
+}
+.vbim-main-drop [data-testid="stBaseButton-secondary"] {
+  background: var(--accent) !important;
+  color: #000 !important;
+  border: none !important;
+  font-family: var(--mono) !important;
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  letter-spacing: .08em !important;
+  margin-top: 12px !important;
+}
+
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: var(--navy); }
@@ -657,6 +690,8 @@ with st.sidebar:
         label_visibility="collapsed",
     )
     dpi = st.slider("Resolución (DPI)", 72, 300, 72, 24)
+    min_contraste = st.slider("Contraste mínimo (ratio)", 1.5, 7.0, 3.0, 0.5,
+                              help="WCAG AA normal=4.5 · AA grande=3.0 · mínimo técnico=1.5")
 
     st.markdown('<div class="vbim-sb-title" style="margin-top:16px">Conexiones</div>', unsafe_allow_html=True)
     dot_groq  = "vbim-dot-ok" if groq_key  else "vbim-dot-err"
@@ -667,11 +702,12 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     st.markdown('<div class="vbim-sb-title" style="margin-top:16px">Archivos</div>', unsafe_allow_html=True)
-    uploads = st.file_uploader(
+    _sb_uploads = st.file_uploader(
         "PDFs",
         type=["pdf"],
         accept_multiple_files=True,
         label_visibility="collapsed",
+        key="sb_upload",
     )
     st.caption("Máx. 200 MB por archivo · Solo PDF")
 
@@ -785,10 +821,23 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Main: lista de archivos + botón analizar ──────────────────────────────────
-if not st.session_state.analizado:
-    # Espacio superior para centrar verticalmente el bloque
-    st.markdown("<div style='height:18vh'></div>", unsafe_allow_html=True)
+# ── Main: dropzone central + lista de archivos + botón analizar ───────────────
+_main_uploads = None
+if not st.session_state.analizado and not _sb_uploads:
+    st.markdown("<div style='height:10vh'></div>", unsafe_allow_html=True)
+    _, _dc, _ = st.columns([1, 2, 1])
+    with _dc:
+        st.markdown('<div class="vbim-main-drop">', unsafe_allow_html=True)
+        _main_uploads = st.file_uploader(
+            "Arrastra tus PDFs aquí o haz clic para seleccionar",
+            type=["pdf"],
+            accept_multiple_files=True,
+            key="main_drop",
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# Combinar ambas fuentes (sidebar tiene prioridad)
+uploads = _sb_uploads or _main_uploads or []
 
 if uploads:
     _, _mid, _ = st.columns([1, 2, 1])
@@ -841,7 +890,7 @@ if _analizar_btn and uploads:
 
             try:
                 resultado, aprobados, total, checks_bool, rule_results = analizar_pagina(
-                    page, img, modo, groq_key, gemini_key, modelo_gemini, upload.name
+                    page, img, modo, groq_key, gemini_key, modelo_gemini, upload.name, min_contraste
                 )
                 img_buf = io.BytesIO()
                 img.save(img_buf, format="PNG")

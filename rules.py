@@ -274,6 +274,71 @@ def analizar_con_reglas(page: fitz.Page, nombre_archivo: str = "") -> list[RuleR
     return resultados
 
 
+def analizar_contraste(page: fitz.Page, img, min_ratio: float = 3.0) -> RuleResult:
+    """Mide el contraste de cada span de texto contra su fondo local en la imagen rasterizada."""
+    import numpy as _np
+
+    if img is None:
+        return RuleResult(id="contraste_lectura", nombre="Contraste y legibilidad",
+                          presente=True, observacion="Imagen no disponible", confianza="baja")
+
+    rect = page.rect
+    iw, ih = img.size
+    if iw == 0 or ih == 0 or rect.width == 0 or rect.height == 0:
+        return RuleResult(id="contraste_lectura", nombre="Contraste y legibilidad",
+                          presente=True, observacion="Imagen vacía", confianza="baja")
+
+    sx = iw / rect.width
+    sy = ih / rect.height
+    gray = _np.array(img.convert("L"), dtype=_np.float32)
+
+    spans_bajo  = []
+    spans_total = 0
+
+    for block in page.get_text("rawdict").get("blocks", []):
+        if block.get("type") != 0:
+            continue
+        for line in block.get("lines", []):
+            for span in line.get("spans", []):
+                txt  = span.get("text", "").strip()
+                bbox = span.get("bbox")
+                if not txt or not bbox or len(txt) < 2:
+                    continue
+                x0 = max(0,      int(bbox[0] * sx))
+                y0 = max(0,      int(bbox[1] * sy))
+                x1 = min(iw - 1, int(bbox[2] * sx) + 1)
+                y1 = min(ih - 1, int(bbox[3] * sy) + 1)
+                if x1 <= x0 or y1 <= y0:
+                    continue
+                region = gray[y0:y1, x0:x1].flatten()
+                if region.size < 4:
+                    continue
+                spans_total += 1
+                # p5 = trazo (oscuro), p95 = fondo (claro)
+                delta = float(_np.percentile(region, 95) - _np.percentile(region, 5))
+                ratio = 1.0 + (delta / 255.0) * 20.0  # 0→1:1, 255→21:1
+                if ratio < min_ratio:
+                    spans_bajo.append((txt[:20], round(ratio, 1)))
+
+    if spans_total == 0:
+        return RuleResult(id="contraste_lectura", nombre="Contraste y legibilidad",
+                          presente=True, observacion="Sin texto analizable en la lámina",
+                          confianza="baja")
+
+    pct = len(spans_bajo) / spans_total
+    presente = pct < 0.15   # falla si >15% de spans están bajo el umbral
+
+    if spans_bajo:
+        ej  = "; ".join(f'"{t}"({r:.0f}:1)' for t, r in spans_bajo[:3])
+        obs = f"{len(spans_bajo)}/{spans_total} textos bajo umbral {min_ratio:.1f}:1 — {ej}"
+    else:
+        obs = f"Legibilidad OK — {spans_total} textos sobre umbral {min_ratio:.1f}:1"
+
+    return RuleResult(id="contraste_lectura", nombre="Contraste y legibilidad",
+                      presente=presente, observacion=obs,
+                      confianza="alta" if spans_total >= 5 else "media")
+
+
 def calcular_puntaje_reglas(resultados: list[RuleResult]) -> tuple[int, int]:
     aplicables = [r for r in resultados if not r.no_aplica]
     aprobados  = sum(1 for r in aplicables if r.presente)
