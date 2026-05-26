@@ -289,7 +289,7 @@ html, body, .stApp {
   align-items: center;
   gap: 7px;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--muted);
   padding: 4px 0;
 }
@@ -301,19 +301,18 @@ html, body, .stApp {
   background: var(--blue) !important;
   border-right: 1px solid var(--border) !important;
 }
-[data-testid="stSidebar"] * { color: var(--text) !important; }
+/* Base uniforme: todo 11px mono en el sidebar */
+[data-testid="stSidebar"] * {
+  font-family: var(--mono) !important;
+  font-size: 11px !important;
+  color: var(--text) !important;
+}
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3 {
-  font-family: var(--mono) !important;
-  font-size: 11px !important;
   text-transform: uppercase;
   letter-spacing: .15em;
   color: var(--muted) !important;
-}
-[data-testid="stSidebar"] .stMarkdown p {
-  font-family: var(--mono) !important;
-  font-size: 11px !important;
 }
 [data-testid="stSidebarNav"] { display: none; }
 
@@ -509,7 +508,7 @@ hr { border-color: var(--border) !important; }
 }
 [data-testid="stSidebar"] [data-testid="stFileUploader"] * {
   font-family: var(--mono) !important;
-  font-size: 10px !important;
+  font-size: 11px !important;
   color: var(--muted) !important;
 }
 [data-testid="stSidebar"] [data-testid="stFileUploader"] small {
@@ -520,9 +519,9 @@ hr { border-color: var(--border) !important; }
   border: none !important;
   color: #000 !important;
   border-radius: 4px !important;
-  font-size: 9px !important;
+  font-size: 11px !important;
   font-weight: 700 !important;
-  letter-spacing: .08em !important;
+  letter-spacing: .06em !important;
   text-transform: uppercase !important;
   width: 100% !important;
   text-align: center !important;
@@ -540,7 +539,7 @@ hr { border-color: var(--border) !important; }
 [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stBaseButton-secondary"]::after {
   content: "Subir o seleccionar archivo";
   visibility: visible;
-  font-size: 9px !important;
+  font-size: 11px !important;
   font-weight: 700 !important;
   letter-spacing: .06em;
 }
@@ -575,7 +574,7 @@ hr { border-color: var(--border) !important; }
 .vbim-sb-header-text { line-height: 1.25; }
 .vbim-sb-header-name {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: #e0f0ff;
   letter-spacing: .08em;
@@ -583,7 +582,7 @@ hr { border-color: var(--border) !important; }
 }
 .vbim-sb-header-sub {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   color: var(--muted);
   letter-spacing: .04em;
   margin-top: 2px;
