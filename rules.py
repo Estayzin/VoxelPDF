@@ -180,22 +180,34 @@ def analizar_con_reglas(page: fitz.Page) -> list[RuleResult]:
         confianza="alta" if n_bloques >= 10 else "media",
     ))
 
-    # ── REGLA 10: Contenido en zona central ─────────────────────────────────
-    # El área central del plano debe tener dibujos (no estar vacía)
-    zona_central = fitz.Rect(
-        rect.width * 0.1, rect.height * 0.1,
-        rect.width * 0.85, rect.height * 0.75
+    # ── REGLA 10: Contenido en zona de dibujo ───────────────────────────────
+    # Divide el área útil (excluyendo franja de viñeta derecha/inferior) en una
+    # cuadrícula 3×3 y cuenta cuántas celdas tienen elementos gráficos.
+    # Esto detecta contenido aunque esté sesgado a la izquierda, derecha o arriba.
+    _zona_dibujo = fitz.Rect(
+        rect.width * 0.02,  rect.height * 0.02,
+        rect.width * 0.82,  rect.height * 0.88,  # excluye franja de viñeta
     )
-    dibujos_centrales = [
-        d for d in dibujos
-        if d.get("rect") and zona_central.intersects(d["rect"])
-    ]
+    _gcols, _grows = 3, 3
+    _cw = _zona_dibujo.width  / _gcols
+    _ch = _zona_dibujo.height / _grows
+    _celdas_con_contenido = 0
+    for _row in range(_grows):
+        for _col in range(_gcols):
+            _celda = fitz.Rect(
+                _zona_dibujo.x0 + _col * _cw,
+                _zona_dibujo.y0 + _row * _ch,
+                _zona_dibujo.x0 + (_col + 1) * _cw,
+                _zona_dibujo.y0 + (_row + 1) * _ch,
+            )
+            if any(d.get("rect") and _celda.intersects(d["rect"]) for d in dibujos):
+                _celdas_con_contenido += 1
     resultados.append(RuleResult(
         id="contenido_central",
         nombre="Contenido en zona de dibujo",
-        presente=len(dibujos_centrales) >= 5,
-        observacion=f"{len(dibujos_centrales)} elementos gráficos en zona central",
-        confianza="alta" if len(dibujos_centrales) >= 20 else "media",
+        presente=_celdas_con_contenido >= 2,
+        observacion=f"{_celdas_con_contenido}/9 celdas de la cuadrícula con contenido gráfico",
+        confianza="alta" if _celdas_con_contenido >= 5 else "media",
     ))
 
     return resultados

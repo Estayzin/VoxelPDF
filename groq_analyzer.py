@@ -31,7 +31,7 @@ Criterios:
 - cotas_dimensiones: ¿Hay cotas numéricas de medidas en muros o espacios?
 - densidad_grafica: ¿El dibujo tiene líneas claras de muros y elementos arquitectónicos?
 - densidad_texto: ¿Hay texto distribuido en el plano (referencias, números, anotaciones)?
-- contenido_central: ¿La zona central de la lámina tiene dibujo y no está vacía?
+- contenido_central: ¿La zona de dibujo de la lámina tiene contenido gráfico distribuido? NO evalúes solo el centro geométrico — revisa toda el área excluyendo la viñeta (borde derecho/inferior). El contenido puede estar sesgado a la izquierda, derecha, arriba o en varias zonas. Marca presente=true si hay líneas, muros, elementos arquitectónicos o dibujo técnico en AL MENOS 2 zonas distintas de la hoja. Solo marca false si la lámina parece completamente en blanco o casi vacía en toda su extensión.
 
 Responde SOLO con el JSON, sin texto adicional."""
 
