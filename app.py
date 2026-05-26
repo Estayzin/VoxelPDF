@@ -104,11 +104,13 @@ _CSS = """
 }
 
 /* ── Ocultar chrome nativo de Streamlit ── */
-[data-testid="stHeader"]    { display: none !important; }
-[data-testid="stMainMenu"]  { display: none !important; }
-[data-testid="stDecoration"]{ display: none !important; }
-footer                      { display: none !important; }
-#MainMenu                   { display: none !important; }
+[data-testid="stHeader"]         { display: none !important; }
+[data-testid="stMainMenu"]       { display: none !important; }
+[data-testid="stDecoration"]     { display: none !important; }
+[data-testid="stSidebarHeader"]  { display: none !important; }
+[data-testid="collapsedControl"] { display: none !important; }
+footer                           { display: none !important; }
+#MainMenu                        { display: none !important; }
 
 /* ── Base ── */
 html, body, .stApp {
@@ -129,7 +131,7 @@ html, body, .stApp {
   position: relative;
   overflow: hidden;
   background: var(--navy);
-  min-height: 220px;
+  min-height: 150px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -537,7 +539,7 @@ hr { border-color: var(--border) !important; }
   font-size: 0 !important;
 }
 [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stBaseButton-secondary"]::after {
-  content: "Subir o seleccionar archivo";
+  content: "Subir archivo";
   visibility: visible;
   font-size: 11px !important;
   font-weight: 700 !important;
