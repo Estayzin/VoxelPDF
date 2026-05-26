@@ -521,13 +521,9 @@ hr { border-color: var(--border) !important; }
   border: none !important;
   color: #000 !important;
   border-radius: 4px !important;
-  font-size: 11px !important;
-  font-weight: 700 !important;
-  letter-spacing: .06em !important;
-  text-transform: uppercase !important;
+  font-size: 0 !important;
   width: 100% !important;
-  text-align: center !important;
-  justify-content: center !important;
+  position: relative !important;
   box-shadow: 0 0 10px rgba(0,212,255,.3) !important;
 }
 [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stBaseButton-secondary"]:hover {
@@ -535,18 +531,23 @@ hr { border-color: var(--border) !important; }
   box-shadow: 0 0 18px rgba(0,212,255,.55) !important;
 }
 [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stBaseButton-secondary"] span {
-  visibility: hidden;
+  visibility: hidden !important;
   font-size: 0 !important;
+  width: 0 !important;
+  padding: 0 !important;
 }
 [data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stBaseButton-secondary"]::after {
-  content: "Subir archivo";
-  visibility: visible;
-  display: block;
-  text-align: center;
-  width: 100%;
-  font-size: 11px !important;
-  font-weight: 700 !important;
-  letter-spacing: .06em;
+  content: "SUBIR ARCHIVO";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: #000;
 }
 
 /* ── Botón de descarga Excel ── */
@@ -581,10 +582,10 @@ hr { border-color: var(--border) !important; }
 .vbim-sb-header-text { line-height: 1.25; text-align: center; }
 .vbim-sb-header-name {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 17px;
   font-weight: 700;
   color: #e0f0ff;
-  letter-spacing: .08em;
+  letter-spacing: .10em;
   text-transform: uppercase;
 }
 .vbim-sb-header-sub {
