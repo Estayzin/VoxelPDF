@@ -490,29 +490,29 @@ hr { border-color: var(--border) !important; }
 }
 .stMarkdown strong { color: var(--accent) !important; }
 
-/* ── Upload drop zone (área principal) ── */
-[data-testid="stFileUploader"] {
-  background: rgba(0,212,255,.03) !important;
-  border: 2px dashed rgba(0,212,255,.22) !important;
-  border-radius: 12px !important;
-  padding: 28px 20px !important;
+/* ── Upload drop zone (sidebar) ── */
+[data-testid="stSidebar"] [data-testid="stFileUploader"] {
+  background: rgba(0,212,255,.04) !important;
+  border: 1px dashed rgba(0,212,255,.3) !important;
+  border-radius: 8px !important;
+  padding: 14px 10px !important;
   transition: border-color .2s, background .2s !important;
 }
-[data-testid="stFileUploader"]:hover {
-  border-color: rgba(0,212,255,.55) !important;
-  background: rgba(0,212,255,.06) !important;
+[data-testid="stSidebar"] [data-testid="stFileUploader"]:hover {
+  border-color: rgba(0,212,255,.6) !important;
+  background: rgba(0,212,255,.07) !important;
 }
-[data-testid="stFileUploader"] * {
+[data-testid="stSidebar"] [data-testid="stFileUploader"] * {
   font-family: var(--mono) !important;
-  font-size: 11px !important;
+  font-size: 10px !important;
   color: var(--muted) !important;
 }
-[data-testid="stFileUploader"] [data-testid="stBaseButton-secondary"] {
+[data-testid="stSidebar"] [data-testid="stFileUploader"] [data-testid="stBaseButton-secondary"] {
   background: transparent !important;
   border: 1px solid rgba(0,212,255,.35) !important;
   color: var(--accent) !important;
-  border-radius: 5px !important;
-  font-size: 10px !important;
+  border-radius: 4px !important;
+  font-size: 9px !important;
 }
 
 /* ── Botón de descarga Excel ── */
@@ -571,6 +571,14 @@ with st.sidebar:
         <div class="vbim-status"><span class="{dot_groq}"></span> Groq</div>
         <div class="vbim-status"><span class="{dot_slack}"></span> Slack</div>
     """, unsafe_allow_html=True)
+
+    st.markdown('<div class="vbim-sb-title" style="margin-top:16px">Archivos</div>', unsafe_allow_html=True)
+    uploads = st.file_uploader(
+        "PDFs",
+        type=["pdf"],
+        accept_multiple_files=True,
+        label_visibility="collapsed",
+    )
 
     st.markdown('<div class="vbim-sb-title" style="margin-top:16px">Acciones</div>', unsafe_allow_html=True)
     if st.button("Limpiar resultados", use_container_width=True):
@@ -682,15 +690,8 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Zona de carga (main) ───────────────────────────────────────────────────────
-uploads = st.file_uploader(
-    "Arrastra aquí tus PDFs de planimetría o haz clic para seleccionar",
-    type=["pdf"],
-    accept_multiple_files=True,
-)
-
+# ── Main: lista de archivos + botón analizar ──────────────────────────────────
 if uploads:
-    # Mostrar lista de archivos cargados
     _cols = st.columns(min(len(uploads), 4))
     for i, u in enumerate(uploads):
         _cols[i % 4].markdown(f"📄 **{u.name}**")
