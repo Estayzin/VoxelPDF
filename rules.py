@@ -11,7 +11,7 @@ class RuleResult:
     confianza: str  # "alta" | "media" | "baja"
 
 
-def analizar_con_reglas(page: fitz.Page) -> list[RuleResult]:
+def analizar_con_reglas(page: fitz.Page, nombre_archivo: str = "") -> list[RuleResult]:
     texto_raw = page.get_text("text")
     texto = texto_raw.upper()
     bloques = page.get_text("dict")["blocks"]
@@ -64,17 +64,32 @@ def analizar_con_reglas(page: fitz.Page) -> list[RuleResult]:
     ))
 
     # ── REGLA 3: Número de lámina ───────────────────────────────────────────
-    # Busca patrones como L-01, PL-01, A-101, Lámina 3, Sheet 2
-    patron_lamina = re.search(
-        r"\b(L|PL|A|E|S|M|C|LÁM|LAM|SHEET|HJ|PLANO)[\s\-_]?\d{1,3}\b",
-        texto_raw, re.IGNORECASE
-    )
+    _patron_lamina_re = r"\b(L|PL|A|E|S|M|C|LÁM|LAM|SHEET|HJ|PLANO)[\s\-_]?\d{1,3}\b"
+    patron_lamina        = re.search(_patron_lamina_re, texto_raw, re.IGNORECASE)
+    patron_lamina_nombre = re.search(_patron_lamina_re, nombre_archivo, re.IGNORECASE) if nombre_archivo else None
+
+    _lamina_en_plano  = patron_lamina.group().strip()        if patron_lamina        else None
+    _lamina_en_nombre = patron_lamina_nombre.group().strip() if patron_lamina_nombre else None
+
+    if _lamina_en_plano:
+        if _lamina_en_nombre:
+            _coincide = _lamina_en_plano.upper() == _lamina_en_nombre.upper()
+            _sufijo   = f" (archivo: {_lamina_en_nombre} {'✓' if _coincide else '≠ no coincide'})"
+        else:
+            _sufijo = ""
+        _obs_lamina  = f"Detectado: {_lamina_en_plano}{_sufijo}"
+        _conf_lamina = "alta" if (_lamina_en_nombre and _lamina_en_plano.upper() == _lamina_en_nombre.upper()) else "media"
+    else:
+        _sufijo      = f" — en nombre de archivo: {_lamina_en_nombre}" if _lamina_en_nombre else ""
+        _obs_lamina  = f"Sin número de lámina en el plano{_sufijo}"
+        _conf_lamina = "media"
+
     resultados.append(RuleResult(
         id="numero_lamina",
         nombre="Número de lámina",
-        presente=bool(patron_lamina),
-        observacion=f"Detectado: {patron_lamina.group().strip()}" if patron_lamina else "Sin número de lámina identificable",
-        confianza="media",
+        presente=bool(_lamina_en_plano),   # pasa/falla solo por lo que hay en el plano
+        observacion=_obs_lamina,
+        confianza=_conf_lamina,
     ))
 
     # ── REGLA 4: Norte u orientación ────────────────────────────────────────
@@ -128,26 +143,32 @@ def analizar_con_reglas(page: fitz.Page) -> list[RuleResult]:
         r"\bSS\.?HH\b",        # SS.HH / SSHH (servicios higiénicos)
         r"\bWC\b",             # WC
     ]
-    ambientes_encontrados = [a for a in _ambientes_exactos if a in texto]
-    for pat in _patrones_abrev:
-        if re.search(pat, texto):
-            ambientes_encontrados.append(re.search(pat, texto).group().strip())
+    if _es_no_planta:
+        resultados.append(RuleResult(
+            id="nombres_ambientes",
+            nombre="Nomenclatura de ambientes",
+            presente=True,
+            observacion=f"No aplica — lámina tipo {_match_no_planta.title()}",
+            confianza="alta",
+        ))
+    else:
+        ambientes_encontrados = [a for a in _ambientes_exactos if a in texto]
+        for pat in _patrones_abrev:
+            if re.search(pat, texto):
+                ambientes_encontrados.append(re.search(pat, texto).group().strip())
 
-    # Códigos numéricos de recintos tipo X.X.X (ej: 1.1.3, 3.2.1).
-    # Requiere ≥2 ocurrencias para evitar confundir con números sueltos.
-    # El patrón excluye decimales de 2 cifras (2.50) y escalas (1:X).
-    _codigos_recinto = re.findall(r"\b\d{1,2}\.\d{1,2}\.\d{1,2}\b", texto_raw)
-    if len(_codigos_recinto) >= 2:
-        ambientes_encontrados.append(f"códigos {_codigos_recinto[0]}…")
+        _codigos_recinto = re.findall(r"\b\d{1,2}\.\d{1,2}\.\d{1,2}\b", texto_raw)
+        if len(_codigos_recinto) >= 2:
+            ambientes_encontrados.append(f"códigos {_codigos_recinto[0]}…")
 
-    resultados.append(RuleResult(
-        id="nombres_ambientes",
-        nombre="Nomenclatura de ambientes",
-        presente=len(ambientes_encontrados) >= 1,
-        observacion=f"Ambientes: {', '.join(dict.fromkeys(ambientes_encontrados[:6]))}" if ambientes_encontrados
-                    else "Sin nombres de ambientes reconocibles",
-        confianza="alta" if len(ambientes_encontrados) >= 2 else "media",
-    ))
+        resultados.append(RuleResult(
+            id="nombres_ambientes",
+            nombre="Nomenclatura de ambientes",
+            presente=len(ambientes_encontrados) >= 1,
+            observacion=f"Ambientes: {', '.join(dict.fromkeys(ambientes_encontrados[:6]))}" if ambientes_encontrados
+                        else "Sin nombres de ambientes reconocibles",
+            confianza="alta" if len(ambientes_encontrados) >= 2 else "media",
+        ))
 
     # ── REGLA 6: Cotas / dimensiones ────────────────────────────────────────
     # Busca números con unidades típicas de planos: 2.50, 3,00 m, 120cm, etc.

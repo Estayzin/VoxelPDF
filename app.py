@@ -24,9 +24,9 @@ def get_secret(key: str) -> str:
         return os.getenv(key, "")
 
 
-def analizar_pagina(page, img, modo, groq_key, gemini_key, modelo_gemini):
+def analizar_pagina(page, img, modo, groq_key, gemini_key, modelo_gemini, nombre_archivo=""):
     if modo == "Reglas (sin IA)":
-        rule_results = analizar_con_reglas(page)
+        rule_results = analizar_con_reglas(page, nombre_archivo)
         aprobados, total = calcular_puntaje_reglas(rule_results)
         checks_bool = {r.nombre: 1 if r.presente else 0 for r in rule_results}
         resultado = {r.id: {"presente": r.presente, "observacion": r.observacion} for r in rule_results}
@@ -34,7 +34,7 @@ def analizar_pagina(page, img, modo, groq_key, gemini_key, modelo_gemini):
         return resultado, aprobados, total, checks_bool, rule_results
     else:
         if "Groq" in modo:
-            resultado = groq_analyzer.analyze_page(img, groq_key)
+            resultado = groq_analyzer.analyze_page(img, groq_key, nombre_archivo)
         else:
             resultado = gemini_analyzer.analyze_page(img, gemini_key, modelo_gemini)
         aprobados, total = gemini_analyzer.calcular_puntaje(resultado)
@@ -834,7 +834,7 @@ if _analizar_btn and uploads:
 
             try:
                 resultado, aprobados, total, checks_bool, rule_results = analizar_pagina(
-                    page, img, modo, groq_key, gemini_key, modelo_gemini
+                    page, img, modo, groq_key, gemini_key, modelo_gemini, upload.name
                 )
                 img_buf = io.BytesIO()
                 img.save(img_buf, format="PNG")
