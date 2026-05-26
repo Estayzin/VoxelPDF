@@ -490,18 +490,29 @@ hr { border-color: var(--border) !important; }
 }
 .stMarkdown strong { color: var(--accent) !important; }
 
-/* ── Sidebar file uploader compacto ── */
-[data-testid="stSidebar"] [data-testid="stFileUploader"] {
-  background: rgba(0,212,255,.04) !important;
-  border: 1px dashed rgba(0,212,255,.3) !important;
-  border-radius: 6px !important;
-  padding: 8px !important;
+/* ── Upload drop zone (área principal) ── */
+[data-testid="stFileUploader"] {
+  background: rgba(0,212,255,.03) !important;
+  border: 2px dashed rgba(0,212,255,.22) !important;
+  border-radius: 12px !important;
+  padding: 28px 20px !important;
+  transition: border-color .2s, background .2s !important;
 }
-[data-testid="stSidebar"] [data-testid="stFileUploader"] * {
+[data-testid="stFileUploader"]:hover {
+  border-color: rgba(0,212,255,.55) !important;
+  background: rgba(0,212,255,.06) !important;
+}
+[data-testid="stFileUploader"] * {
+  font-family: var(--mono) !important;
+  font-size: 11px !important;
+  color: var(--muted) !important;
+}
+[data-testid="stFileUploader"] [data-testid="stBaseButton-secondary"] {
+  background: transparent !important;
+  border: 1px solid rgba(0,212,255,.35) !important;
+  color: var(--accent) !important;
+  border-radius: 5px !important;
   font-size: 10px !important;
-}
-[data-testid="stSidebar"] [data-testid="stFileUploader"] small {
-  display: none !important;
 }
 
 /* ── Botón de descarga Excel ── */
@@ -536,14 +547,13 @@ if "resultados"   not in st.session_state: st.session_state.resultados   = []
 if "analizado"    not in st.session_state: st.session_state.analizado    = False
 if "nombres_pdf"  not in st.session_state: st.session_state.nombres_pdf  = []
 if "checks_names" not in st.session_state: st.session_state.checks_names = []
-if "pdf_activo"   not in st.session_state: st.session_state.pdf_activo   = None
 
 groq_key      = get_secret("GROQ_API_KEY")
 slack_url     = get_secret("SLACK_WEBHOOK_URL")
 gemini_key    = ""
 modelo_gemini = "gemini-2.0-flash-lite"
 
-# ── Sidebar bloque 1: Configuración (debe ir antes del hero para tener modo/dpi) ──
+# ── Sidebar: sólo configuración ────────────────────────────────────────────────
 with st.sidebar:
     st.markdown('<div class="vbim-sb-title">Configuración</div>', unsafe_allow_html=True)
     modo = st.radio(
@@ -553,6 +563,22 @@ with st.sidebar:
         label_visibility="collapsed",
     )
     dpi = st.slider("Resolución (DPI)", 72, 300, 72, 24)
+
+    st.markdown('<div class="vbim-sb-title" style="margin-top:16px">Conexiones</div>', unsafe_allow_html=True)
+    dot_groq  = "vbim-dot-ok" if groq_key  else "vbim-dot-err"
+    dot_slack = "vbim-dot-ok" if slack_url else "vbim-dot-err"
+    st.markdown(f"""
+        <div class="vbim-status"><span class="{dot_groq}"></span> Groq</div>
+        <div class="vbim-status"><span class="{dot_slack}"></span> Slack</div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="vbim-sb-title" style="margin-top:16px">Acciones</div>', unsafe_allow_html=True)
+    if st.button("Limpiar resultados", use_container_width=True):
+        st.session_state.resultados   = []
+        st.session_state.analizado    = False
+        st.session_state.nombres_pdf  = []
+        st.session_state.checks_names = []
+        st.rerun()
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 _BIT_SVG = """
@@ -656,63 +682,28 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Sidebar bloque 2: Archivos + Nav + Conexiones + Acciones ──────────────────
-with st.sidebar:
-    st.markdown('<div class="vbim-sb-title" style="margin-top:14px">Archivos</div>', unsafe_allow_html=True)
-    uploads = st.file_uploader(
-        "PDFs",
-        type=["pdf"],
-        accept_multiple_files=True,
-        label_visibility="collapsed",
+# ── Zona de carga (main) ───────────────────────────────────────────────────────
+uploads = st.file_uploader(
+    "Arrastra aquí tus PDFs de planimetría o haz clic para seleccionar",
+    type=["pdf"],
+    accept_multiple_files=True,
+)
+
+if uploads:
+    # Mostrar lista de archivos cargados
+    _cols = st.columns(min(len(uploads), 4))
+    for i, u in enumerate(uploads):
+        _cols[i % 4].markdown(f"📄 **{u.name}**")
+
+    _analizar_btn = st.button(
+        f"Analizar {len(uploads)} PDF(s)",
+        type="primary",
+        use_container_width=True,
     )
+else:
+    _analizar_btn = False
 
-    _pdfs_nav: dict = {}
-    for _r in st.session_state.resultados:
-        _pdfs_nav.setdefault(_r["pdf_name"], []).append(_r)
-
-    if _pdfs_nav:
-        st.markdown('<div class="vbim-sb-title" style="margin-top:14px">Láminas</div>', unsafe_allow_html=True)
-        _all_type = "primary" if st.session_state.pdf_activo is None else "secondary"
-        if st.button("↩ Ver resumen general", use_container_width=True, type=_all_type):
-            st.session_state.pdf_activo = None
-            st.rerun()
-        for _pname, _rlist in _pdfs_nav.items():
-            _pct   = int(sum(_r["aprobados"] / _r["total"] for _r in _rlist) / len(_rlist) * 100)
-            _dot   = "🟢" if _pct >= 80 else "🟡" if _pct >= 50 else "🔴"
-            _short = (_pname[:19] + "…") if len(_pname) > 20 else _pname
-            _lbl   = f"{_dot} {_short}  {_pct}%"
-            _btype = "primary" if st.session_state.pdf_activo == _pname else "secondary"
-            if st.button(_lbl, key=f"nav_{_pname}", use_container_width=True, type=_btype):
-                st.session_state.pdf_activo = _pname
-                st.rerun()
-
-    st.markdown('<div class="vbim-sb-title" style="margin-top:14px">Conexiones</div>', unsafe_allow_html=True)
-    dot_groq  = "vbim-dot-ok" if groq_key  else "vbim-dot-err"
-    dot_slack = "vbim-dot-ok" if slack_url else "vbim-dot-err"
-    st.markdown(f"""
-        <div class="vbim-status"><span class="{dot_groq}"></span> Groq</div>
-        <div class="vbim-status"><span class="{dot_slack}"></span> Slack</div>
-    """, unsafe_allow_html=True)
-
-    st.markdown('<div class="vbim-sb-title" style="margin-top:14px">Acciones</div>', unsafe_allow_html=True)
-    _analizar_btn = st.button("Analizar", type="primary", use_container_width=True, disabled=not uploads)
-    if st.button("Limpiar", use_container_width=True):
-        st.session_state.resultados   = []
-        st.session_state.analizado    = False
-        st.session_state.nombres_pdf  = []
-        st.session_state.checks_names = []
-        st.session_state.pdf_activo   = None
-        st.rerun()
-
-# ── Estado vacío ───────────────────────────────────────────────────────────────
 if not uploads and not st.session_state.analizado:
-    st.markdown("""
-    **Cómo usar:**
-    1. Selecciona el motor en la barra lateral izquierda
-    2. **Arrastra los PDFs** al panel izquierdo o haz clic en *Browse files*
-    3. Presiona **Analizar** en la barra lateral
-    4. Navega entre láminas con los botones del panel
-    """)
     st.stop()
 
 if _analizar_btn and uploads:
@@ -780,10 +771,8 @@ if _analizar_btn and uploads:
     st.session_state.analizado = True
     st.rerun()
 
-# ── Esperando análisis ─────────────────────────────────────────────────────────
+# ── Sin resultados aún ────────────────────────────────────────────────────────
 if not (st.session_state.analizado and st.session_state.resultados):
-    if uploads:
-        st.info(f"{len(uploads)} PDF(s) cargado(s) — presiona **Analizar** en la barra lateral.")
     st.stop()
 
 # ── Resultados ─────────────────────────────────────────────────────────────────
@@ -797,29 +786,22 @@ pdfs_grouped: dict = {}
 for r in resultados:
     pdfs_grouped.setdefault(r["pdf_name"], []).append(r)
 
-if st.session_state.pdf_activo and st.session_state.pdf_activo in pdfs_grouped:
-    vista       = {st.session_state.pdf_activo: pdfs_grouped[st.session_state.pdf_activo]}
-    vista_lista = vista[st.session_state.pdf_activo]
-else:
-    st.session_state.pdf_activo = None
-    vista       = pdfs_grouped
-    vista_lista = resultados
-
-# ── Métricas globales ──────────────────────────────────────────────────────────
 total_pags = len(resultados)
 aprobadas  = sum(1 for r in resultados if int(r["aprobados"] / r["total"] * 100) >= 80)
+
+# ── Métricas + acciones globales ───────────────────────────────────────────────
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("PDFs",       len(pdfs_grouped))
 c2.metric("Páginas",    total_pags)
 c3.metric("Aprobadas",  f"{aprobadas} ✅")
 c4.metric("Observadas", f"{total_pags - aprobadas} ⚠️")
 
-# ── Export Excel + Slack ───────────────────────────────────────────────────────
+# Excel export
 _rows = []
 for r in resultados:
     _row = {
         "PDF":          r["pdf_name"],
-        "Página":       r["pagina"],
+        "Pagina":       r["pagina"],
         "Score %":      int(r["aprobados"] / r["total"] * 100),
         "Estado":       ("APROBADO"  if int(r["aprobados"]/r["total"]*100) >= 80
                          else "REVISAR" if int(r["aprobados"]/r["total"]*100) >= 50
@@ -851,40 +833,29 @@ with _ce1:
         use_container_width=True,
     )
 with _ce2:
-    if slack_url:
-        if st.button("Enviar a Slack", use_container_width=True, type="secondary"):
-            try:
-                send_bulk_report(
-                    webhook_url=slack_url,
-                    filename=", ".join(pdfs_grouped.keys()),
-                    resultados=resultados,
-                )
-                st.success(f"Reporte de {total_pags} pagina(s) enviado a Slack.")
-            except Exception as e:
-                st.error(f"Error Slack: {e}")
+    if slack_url and st.button("Enviar a Slack", use_container_width=True, type="secondary"):
+        try:
+            send_bulk_report(webhook_url=slack_url,
+                             filename=", ".join(pdfs_grouped.keys()),
+                             resultados=resultados)
+            st.success(f"Reporte de {total_pags} pagina(s) enviado.")
+        except Exception as e:
+            st.error(f"Error Slack: {e}")
 
-# ── Gráfico resumen ────────────────────────────────────────────────────────────
-_titulo_chart = st.session_state.pdf_activo or f"Global — {len(pdfs_grouped)} PDF(s)"
-fig = generar_grafico_resumen(vista_lista, checks_names, _titulo_chart)
+# ── Gráfico global ─────────────────────────────────────────────────────────────
+fig = generar_grafico_resumen(resultados, checks_names, f"Resumen global — {len(pdfs_grouped)} PDF(s)")
 st.pyplot(fig)
 plt.close(fig)
 
 st.markdown("---")
 
-# ── Detalle de páginas ─────────────────────────────────────────────────────────
-for pdf_name, res_pdf in vista.items():
-    if len(vista) > 1:
-        _pct_pdf = int(sum(r["aprobados"]/r["total"] for r in res_pdf) / len(res_pdf) * 100)
-        _badge   = "🟢" if _pct_pdf >= 80 else "🟡" if _pct_pdf >= 50 else "🔴"
-        st.markdown(f"### {_badge} {pdf_name} — {_pct_pdf}%")
-
+# ── Detalle por PDF (tabs si hay varios) ──────────────────────────────────────
+def _mostrar_paginas(res_pdf):
     for r in res_pdf:
         col_img, col_res = st.columns([1, 1])
         img = Image.open(io.BytesIO(r["img_bytes"]))
-
         with col_img:
             st.image(img, caption=f"Pag. {r['pagina']}", use_container_width=True)
-
         with col_res:
             pct = int(r["aprobados"] / r["total"] * 100)
             if pct >= 80:
@@ -896,9 +867,9 @@ for pdf_name, res_pdf in vista.items():
 
             if r["rule_results"]:
                 for rr in r["rule_results"]:
-                    icon = "SI" if rr["presente"] else "NO"
+                    icon = "✅" if rr["presente"] else "❌"
                     conf = {"alta": "●", "media": "◐", "baja": "○"}.get(rr["confianza"], "")
-                    st.markdown(f"**{icon}** {conf} {rr['nombre']}: {rr['observacion']}")
+                    st.markdown(f"{icon} {conf} **{rr['nombre']}**: {rr['observacion']}")
             else:
                 for c in CHECKS:
                     rv   = r["resultado"].get(c["id"], {})
@@ -907,5 +878,17 @@ for pdf_name, res_pdf in vista.items():
                 resumen = r["resultado"].get("resumen", "")
                 if resumen:
                     st.caption(resumen)
-
         st.markdown("---")
+
+if len(pdfs_grouped) == 1:
+    _mostrar_paginas(next(iter(pdfs_grouped.values())))
+else:
+    _tab_labels = []
+    for _pname, _rlist in pdfs_grouped.items():
+        _pct = int(sum(r["aprobados"]/r["total"] for r in _rlist) / len(_rlist) * 100)
+        _dot = "🟢" if _pct >= 80 else "🟡" if _pct >= 50 else "🔴"
+        _tab_labels.append(f"{_dot} {_pname[:25]}")
+    _tabs = st.tabs(_tab_labels)
+    for _tab, (_pname, _rlist) in zip(_tabs, pdfs_grouped.items()):
+        with _tab:
+            _mostrar_paginas(_rlist)
