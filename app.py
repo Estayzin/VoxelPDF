@@ -772,16 +772,20 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ── Main: lista de archivos + botón analizar ──────────────────────────────────
-if uploads:
-    _cols = st.columns(min(len(uploads), 4))
-    for i, u in enumerate(uploads):
-        _cols[i % 4].markdown(f"📄 **{u.name}**")
+if not st.session_state.analizado:
+    # Espacio superior para centrar verticalmente el bloque
+    st.markdown("<div style='height:18vh'></div>", unsafe_allow_html=True)
 
-    _analizar_btn = st.button(
-        f"Analizar {len(uploads)} PDF(s)",
-        type="primary",
-        use_container_width=True,
-    )
+if uploads:
+    _, _mid, _ = st.columns([1, 2, 1])
+    with _mid:
+        for u in uploads:
+            st.markdown(f"📄 **{u.name}**")
+        _analizar_btn = st.button(
+            f"Analizar {len(uploads)} PDF(s)",
+            type="primary",
+            use_container_width=True,
+        )
 else:
     _analizar_btn = False
 
