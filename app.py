@@ -25,7 +25,7 @@ def get_secret(key: str) -> str:
 
 
 def analizar_pagina(page, img, modo, groq_key, gemini_key, modelo_gemini, nombre_archivo="", min_contraste=3.0):
-    contraste = analizar_contraste(page, img, min_contraste)
+    contraste = analizar_contraste(page, min_contraste)
 
     if modo == "Reglas (sin IA)":
         rule_results = analizar_con_reglas(page, nombre_archivo)
@@ -827,8 +827,10 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ── Main: dropzone central + lista de archivos + botón analizar ───────────────
-_main_uploads = None
-if not st.session_state.analizado and not _sb_uploads:
+# Solo mostrar el dropzone cuando no hay archivos de NINGUNA fuente y no se ha analizado
+_main_uploads  = None
+_already_dropped = st.session_state.get("main_drop") or []
+if not st.session_state.analizado and not _sb_uploads and not _already_dropped:
     st.markdown("<div style='height:10vh'></div>", unsafe_allow_html=True)
     _, _dc, _ = st.columns([1, 2, 1])
     with _dc:

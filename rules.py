@@ -122,13 +122,26 @@ def analizar_con_reglas(page: fitz.Page, nombre_archivo: str = "") -> list[RuleR
         keywords_norte = ["NORTE", "NORTH", "↑N", "° N", "°N"]
         tiene_norte_texto = any(k in texto for k in keywords_norte)
         n_aislada = bool(re.search(r"\bN\b", texto_raw))
+        # Plano de ubicación en viñeta también es válido como referencia de orientación
+        kw_ubicacion = ["PLANO DE UBICACIÓN", "PLANO DE UBICACION",
+                        "UBICACIÓN", "UBICACION", "LOCATION MAP",
+                        "LOCALIZACIÓN", "LOCALIZACION", "PLANO UBICACIÓN"]
+        tiene_ubicacion = any(k in texto for k in kw_ubicacion)
+        presente_norte = tiene_norte_texto or n_aislada or tiene_ubicacion
+        if tiene_norte_texto:
+            obs_norte = "Indicador de norte encontrado"
+        elif tiene_ubicacion:
+            obs_norte = "Plano de ubicación en viñeta (referencia de orientación válida)"
+        elif n_aislada:
+            obs_norte = "Letra N aislada (posible norte)"
+        else:
+            obs_norte = "Sin indicador de orientación ni plano de ubicación"
         resultados.append(RuleResult(
             id="orientacion_norte",
             nombre="Orientación / Norte",
-            presente=tiene_norte_texto or n_aislada,
-            observacion="Indicador de norte encontrado" if tiene_norte_texto else
-                        "Letra N aislada (posible norte)" if n_aislada else "Sin indicador de orientación",
-            confianza="alta" if tiene_norte_texto else "baja",
+            presente=presente_norte,
+            observacion=obs_norte,
+            confianza="alta" if (tiene_norte_texto or tiene_ubicacion) else "baja",
         ))
 
     # ── REGLA 5: Nombres de ambientes ───────────────────────────────────────
@@ -160,14 +173,12 @@ def analizar_con_reglas(page: fitz.Page, nombre_archivo: str = "") -> list[RuleR
         r"\bSS\.?HH\b",        # SS.HH / SSHH (servicios higiénicos)
         r"\bWC\b",             # WC
     ]
-    if _es_no_planta or _es_mep:
-        _tipo_label = _match_mep.title() if _es_mep else _match_no_planta.title()
-        _tipo_cat   = "plano MEP" if _es_mep else "lámina tipo"
+    if _es_no_planta:
         resultados.append(RuleResult(
             id="nombres_ambientes",
             nombre="Nomenclatura de ambientes",
             presente=True,
-            observacion=f"No aplica — {_tipo_cat} {_tipo_label}",
+            observacion=f"No aplica — lámina tipo {_match_no_planta.title()}",
             confianza="alta",
             no_aplica=True,
         ))
@@ -291,69 +302,59 @@ def analizar_con_reglas(page: fitz.Page, nombre_archivo: str = "") -> list[RuleR
     return resultados
 
 
-def analizar_contraste(page: fitz.Page, img, min_ratio: float = 3.0) -> RuleResult:
-    """Mide el contraste de cada span de texto contra su fondo local en la imagen rasterizada."""
-    import numpy as _np
+def analizar_contraste(page: fitz.Page, min_ratio: float = 3.0) -> RuleResult:
+    """
+    Verifica contraste de líneas/formas de color contra fondo blanco usando
+    valores de color reales del PDF (fórmula WCAG 2.1). No requiere imagen.
+    """
+    def _lin(c: float) -> float:
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
 
-    if img is None:
+    def _ratio_vs_blanco(r: float, g: float, b: float) -> float:
+        L = 0.2126 * _lin(r) + 0.7152 * _lin(g) + 0.0722 * _lin(b)
+        return 1.05 / (L + 0.05)   # blanco L=1 → (1.05)/(L+0.05)
+
+    bajo    = []
+    total   = 0
+    vistos  = {}  # hex_color → min_ratio para deduplicar en el reporte
+
+    # ── Líneas y formas vectoriales ──
+    for d in page.get_drawings():
+        for key in ("color", "fill"):
+            c = d.get(key)
+            if not c or len(c) < 3:
+                continue
+            r, g, b = float(c[0]), float(c[1]), float(c[2])
+            # Ignorar negro/casi negro y blanco/casi blanco (siempre OK)
+            suma = r + g + b
+            if suma < 0.15 or suma > 2.85:
+                continue
+            total += 1
+            ratio = _ratio_vs_blanco(r, g, b)
+            if ratio < min_ratio:
+                hx = f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}"
+                bajo.append((hx, round(ratio, 1)))
+                if hx not in vistos or vistos[hx] > ratio:
+                    vistos[hx] = round(ratio, 1)
+
+    if total == 0:
         return RuleResult(id="contraste_lectura", nombre="Contraste y legibilidad",
-                          presente=True, observacion="Imagen no disponible", confianza="baja")
+                          presente=True,
+                          observacion="Sin elementos de color — todo en negro (contraste máximo)",
+                          confianza="media")
 
-    rect = page.rect
-    iw, ih = img.size
-    if iw == 0 or ih == 0 or rect.width == 0 or rect.height == 0:
-        return RuleResult(id="contraste_lectura", nombre="Contraste y legibilidad",
-                          presente=True, observacion="Imagen vacía", confianza="baja")
+    pct     = len(bajo) / total
+    presente = pct < 0.20   # falla si >20 % de elementos de color están bajo umbral
 
-    sx = iw / rect.width
-    sy = ih / rect.height
-    gray = _np.array(img.convert("L"), dtype=_np.float32)
-
-    spans_bajo  = []
-    spans_total = 0
-
-    for block in page.get_text("rawdict").get("blocks", []):
-        if block.get("type") != 0:
-            continue
-        for line in block.get("lines", []):
-            for span in line.get("spans", []):
-                txt  = span.get("text", "").strip()
-                bbox = span.get("bbox")
-                if not txt or not bbox or len(txt) < 2:
-                    continue
-                x0 = max(0,      int(bbox[0] * sx))
-                y0 = max(0,      int(bbox[1] * sy))
-                x1 = min(iw - 1, int(bbox[2] * sx) + 1)
-                y1 = min(ih - 1, int(bbox[3] * sy) + 1)
-                if x1 <= x0 or y1 <= y0:
-                    continue
-                region = gray[y0:y1, x0:x1].flatten()
-                if region.size < 4:
-                    continue
-                spans_total += 1
-                # p5 = trazo (oscuro), p95 = fondo (claro)
-                delta = float(_np.percentile(region, 95) - _np.percentile(region, 5))
-                ratio = 1.0 + (delta / 255.0) * 20.0  # 0→1:1, 255→21:1
-                if ratio < min_ratio:
-                    spans_bajo.append((txt[:20], round(ratio, 1)))
-
-    if spans_total == 0:
-        return RuleResult(id="contraste_lectura", nombre="Contraste y legibilidad",
-                          presente=True, observacion="Sin texto analizable en la lámina",
-                          confianza="baja")
-
-    pct = len(spans_bajo) / spans_total
-    presente = pct < 0.15   # falla si >15% de spans están bajo el umbral
-
-    if spans_bajo:
-        ej  = "; ".join(f'"{t}"({r:.0f}:1)' for t, r in spans_bajo[:3])
-        obs = f"{len(spans_bajo)}/{spans_total} textos bajo umbral {min_ratio:.1f}:1 — {ej}"
+    if vistos:
+        ej  = "  ".join(f"{h} ({r:.0f}:1)" for h, r in list(vistos.items())[:4])
+        obs = f"{len(bajo)}/{total} elementos bajo {min_ratio:.1f}:1 — colores: {ej}"
     else:
-        obs = f"Legibilidad OK — {spans_total} textos sobre umbral {min_ratio:.1f}:1"
+        obs = f"Contraste OK — {total} elementos de color sobre {min_ratio:.1f}:1"
 
     return RuleResult(id="contraste_lectura", nombre="Contraste y legibilidad",
                       presente=presente, observacion=obs,
-                      confianza="alta" if spans_total >= 5 else "media")
+                      confianza="alta" if total >= 3 else "media")
 
 
 def calcular_puntaje_reglas(resultados: list[RuleResult]) -> tuple[int, int]:

@@ -17,7 +17,7 @@ CHECKS = [
     {"id": "densidad_grafica", "nombre": "Grafismo / contenido gráfico",   "descripcion": "El dibujo tiene líneas claras de muros, espacios y elementos arquitectónicos"},
     {"id": "densidad_texto",   "nombre": "Etiquetas y texto distribuido",  "descripcion": "Texto distribuido en el plano: referencias, números, anotaciones"},
     {"id": "contenido_central","nombre": "Contenido en zona de dibujo",    "descripcion": "La zona central de la lámina tiene dibujo, no está vacía ni cortada"},
-    {"id": "contraste_lectura","nombre": "Contraste y legibilidad",        "descripcion": "Textos con contraste suficiente respecto al fondo (umbral ajustable con slider)"},
+    {"id": "contraste_lectura","nombre": "Contraste y legibilidad",        "descripcion": "Líneas y formas de color con contraste suficiente contra fondo blanco (WCAG, umbral ajustable)"},
 ]
 
 PROMPT_TEMPLATE = """Eres un revisor experto en planimetría arquitectónica. Analiza esta imagen y evalúa exactamente estos 10 elementos. Responde SOLO con este JSON:
