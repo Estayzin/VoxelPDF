@@ -80,11 +80,15 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 .pdf-size  { font:400 9px var(--mono); color:var(--muted); flex-shrink:0; }
 .pdf-rm    { background:none; border:none; color:var(--muted); cursor:pointer; font-size:13px; line-height:1; padding:0 2px; flex-shrink:0; transition:color .15s; }
 .pdf-rm:hover { color:var(--red); }
+.rcard-retry { background:none; border:none; color:var(--muted); cursor:pointer; font:600 8px var(--mono); padding:2px 5px; border-radius:3px; letter-spacing:.06em; transition:all .15s; flex-shrink:0; line-height:1; }
+.rcard-retry:hover { color:var(--accent); background:rgba(0,212,255,.08); }
 
 /* DPI */
 .dpi-row { display:flex; align-items:center; gap:10px; }
 .dpi-row input[type=range] { flex:1; accent-color:var(--accent); }
 .dpi-val { font:600 11px var(--mono); color:var(--accent); white-space:nowrap; }
+
+.dpi-hint { font:400 9px var(--mono); color:var(--muted); letter-spacing:.04em; margin-top:2px; }
 
 /* Engine radio */
 .engine-opts { display:flex; flex-direction:column; gap:4px; }
@@ -121,7 +125,7 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 .dot-err { background:var(--red); }
 
 /* Results list (rcards) */
-.res { display:none; padding:0 16px 16px; }
+.res { display:none; padding:0 16px 16px; border-top:1px solid var(--border); margin-top:8px; }
 .res.show { display:block; }
 .res-hdr { font:700 9px var(--mono); color:var(--muted); text-transform:uppercase; letter-spacing:.2em; padding:14px 0 8px; }
 .rcard { background:var(--card); border-radius:6px; overflow:hidden; margin-bottom:4px; display:flex; align-items:stretch; cursor:pointer; transition:all .15s; border:1px solid var(--border); }
@@ -171,7 +175,8 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 .check-item:last-child { border-bottom:none; }
 .chk-icon { flex-shrink:0; font-size:10px; margin-top:1px; }
 .chk-name { color:var(--text); font-weight:600; white-space:nowrap; }
-.chk-obs  { color:var(--muted); flex:1; }
+.chk-obs  { color:var(--muted); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:default; transition:white-space .1s; }
+.chk-obs:hover { white-space:normal; }
 .chk-resumen { font:400 10px var(--mono); color:var(--accent); padding:6px 8px; background:rgba(0,212,255,.06); border-radius:4px; border-left:2px solid var(--accent); margin-top:4px; }
 .check-error  { font:400 11px var(--mono); color:var(--red); padding:10px; background:rgba(255,61,87,.08); border-radius:5px; border:1px solid rgba(255,61,87,.2); }
 .chk-info-hdr { font:600 9px var(--mono); color:var(--accent); text-transform:uppercase; letter-spacing:.12em; padding:8px 0 3px; margin-top:6px; border-top:1px solid var(--border); opacity:.65; }
@@ -308,7 +313,7 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
     <button class="hback" id="btnTheme" onclick="toggleTheme()" title="Cambiar tema">&#9728; Modo claro</button>
     <button class="hback" onclick="openConfig()" title="Configurar API Keys">&#9881; API Keys</button>
-    <button class="hback" onclick="window.location.href='/'">&#8592; Volver</button>
+    <button class="hback" id="btnVolver" onclick="history.back()" style="display:none">&#8592; Volver</button>
   </div>
 </header>
 
@@ -338,15 +343,19 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
       <div class="pl-section">
         <div class="sb-title">Resolución</div>
         <div class="dpi-row">
-          <input type="range" id="dpiSlider" min="72" max="300" step="24" value="150"
+          <input type="range" id="dpiSlider" min="72" max="216" step="24" value="150"
                  oninput="document.getElementById('dpiVal').textContent=this.value+' DPI'">
           <span class="dpi-val" id="dpiVal">150 DPI</span>
         </div>
+        <div class="dpi-hint">Menor DPI = análisis más rápido · 150 recomendado</div>
       </div>
 
       <!-- Rcards de páginas analizadas -->
       <div class="res" id="resList">
-        <div class="res-hdr">Páginas analizadas</div>
+        <div class="res-hdr" style="display:flex;align-items:center;gap:6px;">
+          <span style="flex:1">Páginas analizadas</span>
+          <span id="resCount" style="font:400 9px var(--mono);color:var(--muted)"></span>
+        </div>
       </div>
 
     </div><!-- /pl-top -->
@@ -486,23 +495,19 @@ const CHECKS = [
   {id:'orientacion_norte',  nombre:'Orientación / Norte'},
   {id:'nombres_ambientes',  nombre:'Nomenclatura de ambientes'},
   {id:'cotas_dimensiones',  nombre:'Cotas / dimensiones'},
-  {id:'densidad_grafica',   nombre:'Grafismo / contenido gráfico'},
+  {id:'densidad_grafica',   nombre:'Grafismo y contenido en zona de dibujo'},
   {id:'densidad_texto',     nombre:'Etiquetas y texto distribuido'},
-  {id:'contenido_central',  nombre:'Contenido en zona de dibujo'},
   {id:'concordancia_nombre',nombre:'Código lámina vs nombre archivo'},
   {id:'legibilidad_ejes',   nombre:'Ejes legibles / sin solapamiento'},
   {id:'formato_hoja',       nombre:'Formato de hoja (A0–A4)'},
 
   // ── Indicadores informativos (no afectan puntaje) ────────────────────────
-  {id:'tamanio_texto_min', nombre:'Tamaño mínimo de texto (≥ 2 mm)',    informativo:true},
+  {id:'tamanio_texto_min', nombre:'Tamaño mínimo de texto (≥ 2 mm)'},
   {id:'tabla_revisiones',  nombre:'Tabla de revisiones completa',        informativo:true},
-  {id:'paleta_colores',    nombre:'Paleta de colores normativa aplicada', informativo:true},
+  {id:'paleta_colores',    nombre:'Simbología de colores en viñeta'},
 ];
 
-// ── Paleta normativa BIM por especialidad (Formulario 13 PEB) ────────────────
-// RGB extraído del documento de colores del estudio.
-// Especialidades sin color explícito (ARQ, EST, MOB…) usan materialidad.
-const PALETA_NORMATIVA = {
+const PALETA_NORMATIVA = {  // reservado para uso futuro
   'APO': [
     {r:0,   g:112, b:192, s:'APF', nombre:'Agua Potable Fría'},
     {r:237, g:125, b:49,  s:'ACS', nombre:'Agua Caliente'},
@@ -604,6 +609,7 @@ const btnExport   = document.getElementById('btnExport');
 // ── Init ──────────────────────────────────────────────────────────────────────
 function init() {
   updateDots();
+  if (document.referrer) document.getElementById('btnVolver').style.display = '';
 }
 
 function updateDots() {
@@ -708,10 +714,22 @@ async function analizarPDFs() {
   spin.classList.add('show');
   pwrap.classList.add('show');
   setProgress(5);
-  log(`Analizando ${allFiles.length} PDF(s) · motor: ${engine} · ${dpi} DPI`, 'info');
+
+  // Estimar páginas totales para dar feedback de tiempo
+  let estPages = 0;
+  for (const f of allFiles) {
+    try {
+      const ab = await f.arrayBuffer();
+      const tmp = await pdfjsLib.getDocument({ data: ab }).promise;
+      estPages += tmp.numPages;
+    } catch (_) { estPages += 1; }
+  }
+  const estSec = estPages * 7;
+  const estStr = estSec < 60 ? `~${estSec}s` : `~${Math.ceil(estSec/60)} min`;
+  log(`Analizando ${allFiles.length} PDF(s) · ${estPages} pág. · tiempo estimado: ${estStr}`, 'info');
 
   // Limpiar estado anterior
-  resList.innerHTML = '<div class="res-hdr">Páginas analizadas</div>';
+  resList.innerHTML = `<div class="res-hdr" style="display:flex;align-items:center;gap:6px;"><span style="flex:1">Páginas analizadas</span><span id="resCount" style="font:400 9px var(--mono);color:var(--muted)"></span></div>`;
   resList.classList.remove('show');
   resultsView.classList.remove('show');
   resultsView.innerHTML = '';
@@ -764,7 +782,6 @@ async function analizarPDFs() {
 
         const imageB64      = sendCanvas.toDataURL('image/jpeg', 0.85).split(',')[1];
         const textSizeCheck = await detectTextSize(page, vp1.width, vp1.height);
-        const colorCheck    = detectColorPalette(canvas, file.name);  // sync — antes de liberar
 
         // Liberar canvas de memoria
         if (sendCanvas !== canvas) sendCanvas.width = sendCanvas.height = 0;
@@ -783,13 +800,23 @@ async function analizarPDFs() {
           }),
         });
 
-        const result = await resp.json();
-        if (result.error) throw new Error(result.error);
+        let result;
+        try {
+          result = await resp.json();
+          if (result.error) throw new Error(result.error);
+        } catch (pageErr) {
+          log(`Error pág ${pageNum} de "${file.name}": ${pageErr.message}`, 'err');
+          accResults.push({ pdf_name: file.name, pagina: pageNum, error: pageErr.message,
+                            resultado: {}, aprobados: 0, total: 0, pct: 0, img_b64: imageB64,
+                            _fileIdx: allFiles.indexOf(file) });
+          processed++;
+          setProgress(10 + Math.round((processed / totalPages) * 85));
+          continue;
+        }
 
         // Inyectar checks client-side y recalcular puntaje
         result.resultado.formato_hoja     = detectFormat(vp1.width, vp1.height);
         result.resultado.tamanio_texto_min = textSizeCheck;
-        result.resultado.paleta_colores    = colorCheck;
         if (!result.resultado.tabla_revisiones)
           result.resultado.tabla_revisiones = { presente: null, observacion: 'Pendiente — requiere actualización del Worker' };
         const recalc = recalcularPuntaje(result.resultado);
@@ -797,7 +824,8 @@ async function analizarPDFs() {
         result.total     = recalc.total;
         result.pct       = recalc.pct;
 
-        result.img_b64 = imageB64; // guardar para mostrar miniatura
+        result.img_b64   = imageB64;
+        result._fileIdx  = allFiles.indexOf(file);
         accResults.push(result);
         processed++;
         setProgress(10 + Math.round((processed / totalPages) * 85));
@@ -815,6 +843,11 @@ async function analizarPDFs() {
 
   } catch (e) {
     log(`Error: ${e.message}`, 'err');
+    if (accResults.length) {
+      log(`Mostrando ${accResults.length} página(s) completadas antes del error`, 'warn');
+      lastResults = { results: accResults };
+      renderResults(lastResults);
+    }
   } finally {
     btnAnalyze.disabled = false;
     spin.classList.remove('show');
@@ -823,6 +856,73 @@ async function analizarPDFs() {
 }
 
 function setProgress(pct) { pbar.style.width = pct + '%'; }
+
+// ── Re-analizar una página individual ────────────────────────────────────────
+async function reanalyzePage(idx) {
+  if (!lastResults?.results[idx]) return;
+  const prev     = lastResults.results[idx];
+  const file     = allFiles[prev._fileIdx];
+  const pageNum  = prev.pagina;
+  if (!file) { log('Archivo ya no disponible — recarga los PDFs', 'err'); return; }
+
+  const rc = document.getElementById(`rc-${idx}`);
+  if (rc) rc.style.opacity = '.45';
+  log(`Re-analizando "${file.name}" pág ${pageNum}…`, 'info');
+
+  const dpi    = parseInt(document.getElementById('dpiSlider').value);
+  const scale  = dpi / 72;
+  const apiKey = localStorage.getItem('vx_groq_key') || '';
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf  = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const page = await pdf.getPage(pageNum);
+    const vp1  = page.getViewport({ scale: 1.0 });
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width; canvas.height = viewport.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+
+    const MAX_PIXELS = 33_000_000;
+    let sendCanvas = canvas;
+    if (canvas.width * canvas.height > MAX_PIXELS) {
+      const cs = Math.sqrt(MAX_PIXELS / (canvas.width * canvas.height));
+      sendCanvas = document.createElement('canvas');
+      sendCanvas.width  = Math.floor(canvas.width * cs);
+      sendCanvas.height = Math.floor(canvas.height * cs);
+      sendCanvas.getContext('2d').drawImage(canvas, 0, 0, sendCanvas.width, sendCanvas.height);
+    }
+
+    const imageB64      = sendCanvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+    const textSizeCheck = await detectTextSize(page, vp1.width, vp1.height);
+    if (sendCanvas !== canvas) sendCanvas.width = sendCanvas.height = 0;
+    canvas.width = canvas.height = 0;
+
+    const resp = await fetch(WORKER_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_b64: imageB64, engine: 'groq',
+                             api_key: apiKey || undefined, page_num: pageNum, pdf_name: file.name }),
+    });
+    const result = await resp.json();
+    if (result.error) throw new Error(result.error);
+
+    result.resultado.formato_hoja     = detectFormat(vp1.width, vp1.height);
+    result.resultado.tamanio_texto_min = textSizeCheck;
+    if (!result.resultado.tabla_revisiones)
+      result.resultado.tabla_revisiones = { presente: null, observacion: 'Pendiente — requiere actualización del Worker' };
+    const recalc = recalcularPuntaje(result.resultado);
+    result.aprobados = recalc.aprobados; result.total = recalc.total; result.pct = recalc.pct;
+    result.img_b64 = imageB64; result._fileIdx = prev._fileIdx;
+
+    lastResults.results[idx] = result;
+    log(`Re-análisis completo: "${file.name}" pág ${pageNum} → ${result.pct}%`,
+        result.pct >= 80 ? 'ok' : result.pct >= 50 ? 'warn' : 'err');
+    renderResults(lastResults);
+  } catch(e) {
+    log(`Error re-analizando pág ${pageNum}: ${e.message}`, 'err');
+    if (rc) rc.style.opacity = '1';
+  }
+}
 
 // ── Detectar formato de hoja (client-side, a partir de dimensiones pdf.js) ────
 function detectFormat(wPt, hPt) {
@@ -879,10 +979,8 @@ async function detectTextSize(page, pageWPt, pageHPt) {
   };
 }
 
-// ── Detectar paleta de colores normativa (client-side, canvas pixel sampling) ─
-function detectColorPalette(canvas, fileName) {
-  // 1. Identificar especialidad(es) desde el nombre del archivo
-  //    Soporta patrones como "08CLI", "05ARQ", "ALL", "23PAV-ALL"
+function detectColorPalette(canvas, fileName) {  // sin uso — check movido al AI
+  // reservado
   const nameParts = fileName.toUpperCase().replace(/\.PDF$/i, '').split(/[-_\s]+/);
   const espCodes  = [];
   for (const seg of nameParts) {
@@ -971,6 +1069,9 @@ function renderResults(data) {
   dropzone.classList.add('hidden');
   resultsView.classList.add('show');
   resList.classList.add('show');
+  const resCount = document.getElementById('resCount');
+  if (resCount) resCount.textContent = `${results.length} pág.`;
+  if (document.referrer) document.getElementById('btnVolver').style.display = '';
 
   const byPdf = {};
   results.forEach((r, i) => {
@@ -998,16 +1099,19 @@ function renderResults(data) {
       rc.className = 'rcard';
       rc.id = `rc-${r._idx}`;
       rc.innerHTML = `<div class="racc" style="background:${color}"></div>
-        <div class="rbody">
-          <div class="rname">Pág ${r.pagina} &nbsp;${icon}</div>
-          <div class="rmeta">${pdfName.slice(0,22)}${pdfName.length>22?'…':''} · ${pct}%</div>
+        <div class="rbody" style="display:flex;align-items:center;gap:6px;">
+          <div style="flex:1;min-width:0;">
+            <div class="rname">Pág ${r.pagina} &nbsp;${icon}</div>
+            <div class="rmeta">${pdfName.slice(0,22)}${pdfName.length>22?'…':''} · ${r.error ? 'error' : pct+'%'}</div>
+          </div>
+          <button class="rcard-retry" title="Re-analizar esta página" onclick="event.stopPropagation();reanalyzePage(${r._idx})">↺</button>
         </div>`;
-      rc.onclick = () => scrollToPage(r._idx);
+      rc.querySelector('.rbody').addEventListener('click', () => scrollToPage(r._idx));
       resList.appendChild(rc);
     });
 
     if (pages.length > 1) section.appendChild(buildChartSection(pages, pdfName));
-    section.appendChild(buildHeatmapSection(pages));
+    if (pages.length > 1) section.appendChild(buildHeatmapSection(pages));
     frag.appendChild(section);
   });
 
@@ -1063,10 +1167,12 @@ function buildPageCard(r) {
     CHECKS.filter(c => !c.informativo).forEach(c => {
       const v        = r.resultado?.[c.id] || {};
       const obs      = v.observacion || '';
+      if (obs.startsWith('Pendiente')) return;  // check no implementado aún — ocultar
       const noAplica = obs.startsWith('No aplica');
       const asIndicated = obs.startsWith('As Indicated');
       const icon     = noAplica ? '❕' : asIndicated ? '⚠️' : v.presente ? '✅' : '❌';
-      list.appendChild(buildCheckRow(icon, c.nombre, obs));
+      const tip      = asIndicated ? 'Advertencia: escala en inglés — verificar que sea intencional' : '';
+      list.appendChild(buildCheckRow(icon, c.nombre, obs, tip));
     });
 
     const infoChecks = CHECKS.filter(c => c.informativo);
@@ -1078,7 +1184,8 @@ function buildPageCard(r) {
       infoChecks.forEach(c => {
         const v    = r.resultado?.[c.id] || {};
         const icon = v.presente === null || v.presente === undefined ? 'ℹ️' : v.presente ? '✅' : '⚠️';
-        list.appendChild(buildCheckRow(icon, c.nombre, v.observacion || ''));
+        const tip  = icon === '⚠️' ? 'Indicador informativo: no afecta el puntaje' : '';
+        list.appendChild(buildCheckRow(icon, c.nombre, v.observacion || '', tip));
       });
     }
 
@@ -1096,11 +1203,12 @@ function buildPageCard(r) {
   return card;
 }
 
-function buildCheckRow(icon, nombre, obs) {
+function buildCheckRow(icon, nombre, obs, tooltip = '') {
   const row = document.createElement('div');
   row.className = 'check-item';
+  const tipAttr = tooltip ? ` title="${tooltip}"` : '';
   row.innerHTML =
-    `<span class="chk-icon">${icon}</span>` +
+    `<span class="chk-icon"${tipAttr} style="${tooltip?'cursor:help':''}">${icon}</span>` +
     `<span class="chk-name">${nombre}</span>` +
     `<span class="chk-obs">${obs}</span>`;
   return row;
@@ -1239,7 +1347,7 @@ function buildGlobalMetrics(results, byPdf) {
 function scrollToPage(idx) {
   document.querySelectorAll('.rcard').forEach(c => c.classList.remove('active'));
   const rc = document.getElementById(`rc-${idx}`);
-  if (rc) rc.classList.add('active');
+  if (rc) { rc.classList.add('active'); rc.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
   const card = document.getElementById(`page-${idx}`);
   if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
