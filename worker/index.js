@@ -48,7 +48,7 @@ const PROMPT = `Eres un revisor experto en planimetría arquitectónica latinoam
 }
 
 Criterios:
-- vineta_keywords: ¿Hay viñeta/carátula con título, número de lámina, escala, fecha y firma?
+- vineta_keywords: ¿La viñeta/carátula tiene todos estos campos RELLENOS con contenido real (no vacíos, no en blanco): título del proyecto, número de lámina, escala, fecha y firma o nombre del profesional? Marca false si alguno de estos campos está vacío, en blanco o sin contenido visible.
 - vineta_ubicacion: ¿La viñeta está en la esquina inferior derecha o borde derecho?
 - numero_lamina: ¿Se ve un código de lámina (L-01, A-101, PL-02, Sheet 3, etc.)?
 - escala_numerica: ¿Se indica la escala como 1:X (ej: 1:50, 1:100)?
