@@ -1268,7 +1268,7 @@ function renderResults(data) {
             <div class="rname">Pág ${r.pagina} &nbsp;${icon}</div>
             <div class="rmeta">${pdfName.slice(0,22)}${pdfName.length>22?'…':''} · ${r.error ? 'error' : pct+'%'}</div>
           </div>
-          <button class="rcard-retry" title="Re-analizar esta página" onclick="event.stopPropagation();reanalyzePage(${r._idx})">↺</button>
+          ${r.error ? `<button class="rcard-retry" title="Re-analizar esta página" onclick="event.stopPropagation();reanalyzePage(${r._idx})">↺</button>` : ''}
         </div>`;
       rc.querySelector('.rbody').addEventListener('click', () => scrollToPage(r._idx));
       resList.appendChild(rc);
