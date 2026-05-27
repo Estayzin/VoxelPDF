@@ -97,9 +97,9 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 .eopt input[type=radio] { accent-color:var(--accent); flex-shrink:0; }
 
 /* Analyze button */
-.btn-gen { width:100%; padding:10px; background:linear-gradient(135deg,var(--green),#00a844); color:#000; border:none; border-radius:6px; font:700 11px var(--mono); cursor:pointer; transition:all .15s; text-transform:uppercase; letter-spacing:.1em; box-shadow:0 0 15px rgba(0,200,83,.2); }
-.btn-gen:hover:not(:disabled) { box-shadow:0 0 25px rgba(0,200,83,.4); transform:translateY(-1px); }
-.btn-gen:disabled { background:#1a2a40; color:var(--muted); cursor:not-allowed; box-shadow:none; }
+.btn-gen { width:100%; padding:9px; background:rgba(0,212,255,.08); color:var(--accent); border:1px solid rgba(0,212,255,.25); border-radius:6px; font:700 11px var(--mono); cursor:pointer; transition:all .15s; text-transform:uppercase; letter-spacing:.1em; }
+.btn-gen:hover:not(:disabled) { background:rgba(0,212,255,.14); border-color:var(--accent); box-shadow:0 0 12px rgba(0,212,255,.2); }
+.btn-gen:disabled { background:#1a2a40; color:var(--muted); border-color:transparent; cursor:not-allowed; }
 
 /* Log box */
 .sbox { display:none; background:var(--blue); border-radius:6px; overflow:hidden; border:1px solid var(--border); }
@@ -243,8 +243,8 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 [data-theme="light"] .btn-cargar.loaded { background:rgba(0,200,83,.12); color:#00c853; border:1px solid rgba(0,200,83,.28); }
 
 /* Botón exportar Excel */
-.btn-export { width:100%; padding:9px; background:rgba(21,128,61,.12); color:#00c853; border:1px solid rgba(0,200,83,.3); border-radius:6px; font:700 10px var(--mono); cursor:pointer; transition:all .15s; text-transform:uppercase; letter-spacing:.08em; display:none; }
-.btn-export:hover { background:rgba(21,128,61,.22); border-color:var(--green); box-shadow:0 0 12px rgba(0,200,83,.2); }
+.btn-export { width:100%; padding:10px; background:linear-gradient(135deg,var(--green),#00a844); color:#000; border:none; border-radius:6px; font:700 11px var(--mono); cursor:pointer; transition:all .15s; text-transform:uppercase; letter-spacing:.1em; box-shadow:0 0 15px rgba(0,200,83,.2); display:none; }
+.btn-export:hover { box-shadow:0 0 25px rgba(0,200,83,.4); transform:translateY(-1px); }
 
 /* ── CONFIG SIDEBAR ── */
 .cfg-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100; display:none; }
