@@ -70,6 +70,8 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 .btn-cargar { width:100%; padding:10px; background:var(--accent); color:#000; border:none; border-radius:6px; font:700 11px var(--mono); cursor:pointer; letter-spacing:.08em; text-transform:uppercase; transition:all .15s; display:flex; align-items:center; justify-content:center; gap:8px; }
 .btn-cargar:hover { background:#00bcd4; box-shadow:0 0 20px rgba(0,212,255,.3); }
 .btn-cargar.loaded { background:rgba(0,200,83,.12); color:var(--green); border:1px solid rgba(0,200,83,.28); }
+.btn-otros { background:rgba(100,116,139,.12); color:var(--muted); border:1px solid var(--border); flex:0 0 auto; width:auto; padding:10px 12px; }
+.btn-otros:hover { background:rgba(100,116,139,.22); box-shadow:none; color:var(--fg); }
 
 /* Lista de PDFs cargados */
 .pdf-list { padding:8px 16px 4px; display:flex; flex-direction:column; gap:4px; }
@@ -366,10 +368,16 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
       <!-- Upload -->
       <div class="pl-section">
         <div class="sb-title">Archivos PDF</div>
-        <input type="file" id="fi" accept=".pdf" multiple style="display:none" onchange="handleFileInput(this.files)">
-        <button class="btn-cargar" id="btnCargar" onclick="document.getElementById('fi').click()">
-          &#128194;&nbsp; Abrir PDF(s)
-        </button>
+        <input type="file" id="fi"  accept=".pdf" multiple style="display:none" onchange="handleFileInput(this.files)">
+        <input type="file" id="fi2" accept=".pdf" multiple style="display:none" onchange="handleReplaceInput(this.files)">
+        <div style="display:flex;gap:5px">
+          <button class="btn-cargar" id="btnCargar" onclick="document.getElementById('fi').click()">
+            &#128194;&nbsp; Abrir PDF(s)
+          </button>
+          <button class="btn-cargar btn-otros" id="btnSubirOtros" style="display:none" title="Limpiar lista y subir nuevos PDF(s)" onclick="document.getElementById('fi2').click()">
+            &#8635;&nbsp; Otros
+          </button>
+        </div>
       </div>
 
       <!-- Lista de PDFs cargados -->
@@ -814,10 +822,12 @@ function resetSession() {
   const btnCargar = document.getElementById('btnCargar');
   btnCargar.classList.remove('loaded');
   btnCargar.innerHTML = '&#128194;&nbsp; Abrir PDF(s)';
+  document.getElementById('btnSubirOtros').style.display = 'none';
 
   document.getElementById('pdfList').innerHTML =
     '<div class="pdf-empty" id="pdfEmpty">Sin archivos cargados</div>';
-  document.getElementById('fi').value = '';
+  document.getElementById('fi').value  = '';
+  document.getElementById('fi2').value = '';
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -858,7 +868,8 @@ function handleFiles(files) {
 
   const btn = document.getElementById('btnCargar');
   btn.classList.add('loaded');
-  btn.innerHTML = '&#10003;&nbsp; Agregar más PDF(s)';
+  btn.innerHTML = '&#10003;&nbsp; Agregar más';
+  document.getElementById('btnSubirOtros').style.display = '';
   log(`${allFiles.length} PDF(s) cargado(s)`, 'ok');
 }
 
@@ -898,7 +909,14 @@ function removePdf(idx) {
     const btn = document.getElementById('btnCargar');
     btn.classList.remove('loaded');
     btn.innerHTML = '&#128194;&nbsp; Abrir PDF(s)';
+    document.getElementById('btnSubirOtros').style.display = 'none';
   }
+}
+
+function handleReplaceInput(files) {
+  allFiles = [];
+  document.getElementById('fi2').value = '';
+  handleFiles(Array.from(files));
 }
 
 // ── Drag & drop ───────────────────────────────────────────────────────────────
@@ -998,7 +1016,7 @@ async function analizarPDFs() {
           sendCanvas.getContext('2d').drawImage(canvas, 0, 0, cw, ch);
         }
 
-        const imageB64      = sendCanvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+        const imageB64      = sendCanvas.toDataURL('image/jpeg', 0.92).split(',')[1];
         const textSizeCheck = await detectTextSize(page, vp1.width, vp1.height);
 
         // Liberar canvas de memoria
@@ -1111,7 +1129,7 @@ async function reanalyzePage(idx) {
       sendCanvas.getContext('2d').drawImage(canvas, 0, 0, sendCanvas.width, sendCanvas.height);
     }
 
-    const imageB64      = sendCanvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+    const imageB64      = sendCanvas.toDataURL('image/jpeg', 0.92).split(',')[1];
     const textSizeCheck = await detectTextSize(page, vp1.width, vp1.height);
     if (sendCanvas !== canvas) sendCanvas.width = sendCanvas.height = 0;
     canvas.width = canvas.height = 0;
