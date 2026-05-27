@@ -278,6 +278,41 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
   .page-card-img { width:100%; max-height:260px; border-right:none; border-bottom:1px solid var(--border); }
   .metrics-grid { grid-template-columns:repeat(2,1fr); }
 }
+
+/* ── ONBOARDING MODAL ── */
+.ob-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:200; display:none; align-items:center; justify-content:center; }
+.ob-overlay.open { display:flex; }
+.ob-modal { background:var(--navy); border:1px solid var(--border); border-radius:12px; width:460px; max-width:94vw; box-shadow:0 24px 64px rgba(0,0,0,.55); display:flex; flex-direction:column; overflow:hidden; }
+.ob-header { padding:24px 24px 0; display:flex; flex-direction:column; align-items:center; gap:10px; }
+.ob-logo { width:44px; height:52px; }
+.ob-title { font:700 13px var(--mono); color:#e0f0ff; letter-spacing:.08em; text-transform:uppercase; }
+.ob-dots { display:flex; justify-content:center; gap:8px; padding:14px 0 4px; }
+.ob-dot { width:7px; height:7px; border-radius:50%; background:var(--border); transition:background .2s; cursor:pointer; }
+.ob-dot.active { background:var(--accent); }
+.ob-body { padding:12px 24px 8px; }
+.ob-sub { font:400 11px var(--mono); color:var(--muted); text-align:center; line-height:1.8; }
+.ob-how { display:flex; flex-direction:column; gap:9px; }
+.ob-how-item { display:flex; align-items:flex-start; gap:12px; padding:10px 13px; background:var(--blue); border-radius:6px; border:1px solid var(--border); }
+.ob-how-icon { font-size:17px; flex-shrink:0; margin-top:1px; }
+.ob-how-ttl { font:600 11px var(--mono); color:var(--text); margin-bottom:2px; }
+.ob-how-dsc { font:400 10px var(--mono); color:var(--muted); line-height:1.6; }
+.ob-key-note { font:400 10px var(--mono); color:var(--muted); background:var(--blue); border:1px solid var(--border); border-radius:5px; padding:10px 13px; line-height:1.7; margin-bottom:10px; }
+.ob-key-link { color:var(--accent); text-decoration:none; }
+.ob-key-link:hover { text-decoration:underline; }
+.ob-key-row { display:flex; gap:5px; margin-bottom:8px; }
+.ob-key-row input { flex:1; padding:8px 10px; background:var(--blue); border:1px solid var(--border); border-radius:5px; color:var(--text); font:400 11px var(--mono); outline:none; transition:border-color .15s; }
+.ob-key-row input:focus { border-color:var(--accent); }
+.ob-key-row input::placeholder { color:var(--border); }
+.ob-skip { background:none; border:none; color:var(--muted); font:400 9px var(--mono); cursor:pointer; padding:2px 0; letter-spacing:.05em; text-decoration:underline; transition:color .15s; display:block; margin:0 auto; }
+.ob-skip:hover { color:var(--text); }
+.ob-footer { padding:14px 24px 20px; display:flex; gap:8px; align-items:center; border-top:1px solid var(--border); margin-top:12px; }
+.ob-btn-prev { padding:8px 14px; background:transparent; color:var(--muted); border:1px solid var(--border); border-radius:5px; font:600 10px var(--mono); cursor:pointer; text-transform:uppercase; letter-spacing:.08em; transition:all .15s; }
+.ob-btn-prev:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
+.ob-btn-prev:disabled { opacity:.3; cursor:default; }
+.ob-btn-next { flex:1; padding:9px; background:var(--accent); color:#000; border:none; border-radius:5px; font:700 11px var(--mono); cursor:pointer; text-transform:uppercase; letter-spacing:.1em; transition:opacity .15s; }
+.ob-btn-next:hover { opacity:.88; }
+.ob-btn-finish { flex:1; padding:9px; background:linear-gradient(135deg,var(--green),#00a844); color:#000; border:none; border-radius:5px; font:700 11px var(--mono); cursor:pointer; text-transform:uppercase; letter-spacing:.1em; box-shadow:0 0 14px rgba(0,200,83,.2); transition:all .15s; }
+.ob-btn-finish:hover { box-shadow:0 0 24px rgba(0,200,83,.4); }
 </style>
 </head>
 <body>
@@ -313,7 +348,7 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
     <button class="hback" id="btnTheme" onclick="toggleTheme()" title="Cambiar tema">&#9728; Modo claro</button>
     <button class="hback" onclick="openConfig()" title="Configurar API Keys">&#9881; API Keys</button>
-    <button class="hback" id="btnVolver" onclick="history.back()" style="display:none">&#8592; Volver</button>
+    <button class="hback" onclick="openOnboarding()" title="Ayuda / Introducción">&#63; Ayuda</button>
   </div>
 </header>
 
@@ -448,6 +483,100 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
   &copy; 2026 VoxelBIM &mdash; Revisor de Planimetría &mdash; MIT License
   &nbsp;&middot;&nbsp; <span style="opacity:.4;">Carlos Estay Ruggieri</span>
 </footer>
+
+<!-- ── ONBOARDING MODAL ──────────────────────────── -->
+<div id="obOverlay" class="ob-overlay">
+  <div class="ob-modal">
+    <div class="ob-header">
+      <svg class="ob-logo" viewBox="0 0 90 105" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <g class="bit-wrap">
+          <polygon class="bit-face" points="45,4 75,28 15,28" fill="rgba(0,212,255,0.22)" stroke="#00d4ff" stroke-width="1.4" stroke-linejoin="round"/>
+          <polygon points="75,28 45,4 82,52" fill="rgba(0,212,255,0.10)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
+          <polygon points="15,28 45,4 8,52" fill="rgba(0,212,255,0.18)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
+          <polygon points="15,28 75,28 82,52 45,68 8,52" fill="rgba(0,212,255,0.07)" stroke="#00d4ff" stroke-width="1.0" stroke-linejoin="round"/>
+          <polygon points="75,28 82,52 62,78" fill="rgba(0,212,255,0.15)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
+          <polygon points="15,28 8,52 28,78" fill="rgba(0,212,255,0.20)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
+          <polygon points="8,52 28,78 45,100 45,68" fill="rgba(0,212,255,0.07)" stroke="rgba(0,212,255,0.35)" stroke-width="0.7" stroke-linejoin="round"/>
+          <polygon points="82,52 62,78 45,100 45,68" fill="rgba(0,212,255,0.12)" stroke="rgba(0,212,255,0.35)" stroke-width="0.7" stroke-linejoin="round"/>
+          <polygon points="28,78 62,78 45,100" fill="rgba(0,212,255,0.14)" stroke="#00d4ff" stroke-width="1.2" stroke-linejoin="round"/>
+          <line class="bit-edge1" x1="15" y1="28" x2="45" y2="4" stroke="#00d4ff" stroke-width="2.4" stroke-linecap="round"/>
+          <line class="bit-edge2" x1="45" y1="4" x2="75" y2="28" stroke="#00d4ff" stroke-width="1.6" stroke-linecap="round"/>
+          <circle class="bit-top" cx="45" cy="4" r="3" fill="#00d4ff"/>
+          <circle class="bit-vtx-mid" cx="15" cy="28" r="1.8" fill="#00d4ff" opacity="0.5"/>
+          <circle class="bit-vtx-mid" cx="75" cy="28" r="1.8" fill="#00d4ff" opacity="0.5"/>
+          <circle class="bit-vtx-mid" cx="8" cy="52" r="1.4" fill="#00d4ff" opacity="0.35"/>
+          <circle class="bit-vtx-mid" cx="82" cy="52" r="1.4" fill="#00d4ff" opacity="0.35"/>
+          <circle class="bit-vtx-bot" cx="45" cy="100" r="2.2" fill="#00d4ff" opacity="0.65"/>
+        </g>
+      </svg>
+      <div class="ob-title" id="obTitle">Bienvenido a VoxelBIM</div>
+    </div>
+    <div class="ob-dots">
+      <div class="ob-dot active" id="obDot0" onclick="_obGoto(0)"></div>
+      <div class="ob-dot" id="obDot1" onclick="_obGoto(1)"></div>
+      <div class="ob-dot" id="obDot2" onclick="_obGoto(2)"></div>
+    </div>
+    <div class="ob-body">
+
+      <!-- Paso 0: Bienvenida -->
+      <div id="obStep0">
+        <p class="ob-sub">
+          Revisor de planimetría arquitectónica con IA.<br>
+          Analiza láminas PDF y evalúa automáticamente<br>
+          <strong style="color:var(--accent)">12 criterios de calidad</strong> en segundos.
+        </p>
+      </div>
+
+      <!-- Paso 1: Cómo funciona -->
+      <div id="obStep1" style="display:none">
+        <div class="ob-how">
+          <div class="ob-how-item">
+            <div class="ob-how-icon">&#128194;</div>
+            <div>
+              <div class="ob-how-ttl">Carga tus PDFs</div>
+              <div class="ob-how-dsc">Arrastra o abre uno o más archivos PDF con planos arquitectónicos, MEP o estructurales.</div>
+            </div>
+          </div>
+          <div class="ob-how-item">
+            <div class="ob-how-icon">&#128269;</div>
+            <div>
+              <div class="ob-how-ttl">Análisis con IA</div>
+              <div class="ob-how-dsc">Groq evalúa cada lámina — viñeta, escala, orientación, cotas, ejes, colores y más.</div>
+            </div>
+          </div>
+          <div class="ob-how-item">
+            <div class="ob-how-icon">&#128202;</div>
+            <div>
+              <div class="ob-how-ttl">Revisa resultados</div>
+              <div class="ob-how-dsc">Puntaje por lámina, heatmap de problemas y exportación a Excel.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Paso 2: API Key -->
+      <div id="obStep2" style="display:none">
+        <div class="ob-key-note">
+          VoxelBIM usa <strong>Groq</strong> como motor de IA &mdash; es gratuito.<br>
+          Crea tu cuenta y copia tu API Key en<br>
+          <a href="https://console.groq.com/keys" target="_blank" rel="noopener" class="ob-key-link">console.groq.com/keys</a>
+        </div>
+        <div class="ob-key-row">
+          <input type="password" id="obGroqKey" placeholder="gsk_…" autocomplete="off" spellcheck="false"
+                 onkeydown="if(event.key==='Enter') obFinish()">
+          <button class="cfg-eye" onclick="togglePwd('obGroqKey',this)" title="Mostrar/ocultar">&#128065;</button>
+        </div>
+        <button class="ob-skip" onclick="closeOnboarding()">Ya tengo la clave configurada en el Worker &mdash; saltar</button>
+      </div>
+
+    </div>
+    <div class="ob-footer">
+      <button class="ob-btn-prev" id="obBtnPrev" onclick="obPrev()" disabled>&#8592; Anterior</button>
+      <button class="ob-btn-next" id="obBtnNext" onclick="obNext()">Siguiente &#8594;</button>
+      <button class="ob-btn-finish" id="obBtnFinish" onclick="obFinish()" style="display:none">Comenzar &#10003;</button>
+    </div>
+  </div>
+</div>
 
 <!-- ── CONFIG SIDEBAR ─────────────────────────────── -->
 <div id="cfgOverlay" class="cfg-overlay" onclick="closeConfig()"></div>
@@ -606,10 +735,48 @@ const dotGroq     = document.getElementById('dotGroq');
 const btnAnalyze  = document.getElementById('btnAnalyze');
 const btnExport   = document.getElementById('btnExport');
 
+// ── Onboarding ────────────────────────────────────────────────────────────────
+let _obStep = 0;
+const _OB_TITLES = ['Bienvenido a VoxelBIM', 'Cómo funciona', 'Configura tu API Key'];
+
+function openOnboarding() {
+  _obStep = 0;
+  _renderObStep();
+  document.getElementById('obOverlay').classList.add('open');
+}
+
+function closeOnboarding() {
+  localStorage.setItem('vx_onboarded', '1');
+  document.getElementById('obOverlay').classList.remove('open');
+}
+
+function _obGoto(n) { _obStep = n; _renderObStep(); }
+
+function _renderObStep() {
+  [0, 1, 2].forEach(i => {
+    document.getElementById(`obStep${i}`).style.display = i === _obStep ? '' : 'none';
+    document.getElementById(`obDot${i}`).classList.toggle('active', i === _obStep);
+  });
+  document.getElementById('obTitle').textContent = _OB_TITLES[_obStep];
+  document.getElementById('obBtnPrev').disabled = _obStep === 0;
+  const last = _obStep === 2;
+  document.getElementById('obBtnNext').style.display   = last ? 'none' : '';
+  document.getElementById('obBtnFinish').style.display = last ? '' : 'none';
+}
+
+function obNext() { if (_obStep < 2) { _obStep++; _renderObStep(); } }
+function obPrev() { if (_obStep > 0) { _obStep--; _renderObStep(); } }
+
+function obFinish() {
+  const k = document.getElementById('obGroqKey').value.trim();
+  if (k) { localStorage.setItem('vx_groq_key', k); updateDots(); }
+  closeOnboarding();
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 function init() {
   updateDots();
-  if (document.referrer) document.getElementById('btnVolver').style.display = '';
+  if (!localStorage.getItem('vx_onboarded')) openOnboarding();
 }
 
 function updateDots() {
