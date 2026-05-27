@@ -173,7 +173,9 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 .chk-name { color:var(--text); font-weight:600; white-space:nowrap; }
 .chk-obs  { color:var(--muted); flex:1; }
 .chk-resumen { font:400 10px var(--mono); color:var(--accent); padding:6px 8px; background:rgba(0,212,255,.06); border-radius:4px; border-left:2px solid var(--accent); margin-top:4px; }
-.check-error { font:400 11px var(--mono); color:var(--red); padding:10px; background:rgba(255,61,87,.08); border-radius:5px; border:1px solid rgba(255,61,87,.2); }
+.check-error  { font:400 11px var(--mono); color:var(--red); padding:10px; background:rgba(255,61,87,.08); border-radius:5px; border:1px solid rgba(255,61,87,.2); }
+.chk-info-hdr { font:600 9px var(--mono); color:var(--accent); text-transform:uppercase; letter-spacing:.12em; padding:8px 0 3px; margin-top:6px; border-top:1px solid var(--border); opacity:.65; }
+.hm-info      { background:rgba(255,107,53,.12); color:var(--warn); }
 
 /* Chart section */
 .chart-section { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:18px 20px; }
@@ -490,7 +492,96 @@ const CHECKS = [
   {id:'concordancia_nombre',nombre:'Código lámina vs nombre archivo'},
   {id:'legibilidad_ejes',   nombre:'Ejes legibles / sin solapamiento'},
   {id:'formato_hoja',       nombre:'Formato de hoja (A0–A4)'},
+
+  // ── Indicadores informativos (no afectan puntaje) ────────────────────────
+  {id:'tamanio_texto_min', nombre:'Tamaño mínimo de texto (≥ 2 mm)',    informativo:true},
+  {id:'tabla_revisiones',  nombre:'Tabla de revisiones completa',        informativo:true},
+  {id:'paleta_colores',    nombre:'Paleta de colores normativa aplicada', informativo:true},
 ];
+
+// ── Paleta normativa BIM por especialidad (Formulario 13 PEB) ────────────────
+// RGB extraído del documento de colores del estudio.
+// Especialidades sin color explícito (ARQ, EST, MOB…) usan materialidad.
+const PALETA_NORMATIVA = {
+  'APO': [
+    {r:0,   g:112, b:192, s:'APF', nombre:'Agua Potable Fría'},
+    {r:237, g:125, b:49,  s:'ACS', nombre:'Agua Caliente'},
+    {r:255, g:153, b:102, s:'ACR', nombre:'Retorno Agua Caliente'},
+  ],
+  'ATR': [
+    {r:156, g:182, b:12,  s:'UPA', nombre:'Agua Ultra Pura Alim.'},
+    {r:210, g:216, b:6,   s:'UPR', nombre:'Agua Ultra Pura Ret.'},
+    {r:225, g:250, b:90,  s:'BLA', nombre:'Agua Blanda Alim.'},
+    {r:255, g:6,   b:255, s:'BLR', nombre:'Agua Blanda Ret.'},
+    {r:85,  g:25,  b:90,  s:'ATR', nombre:'Aguas Tratadas (eq.)'},
+  ],
+  'ALC': [
+    {r:50,  g:60,  b:160, s:'DES', nombre:'Alcantarillado'},
+    {r:159, g:255, b:127, s:'VEN', nombre:'Ventilación'},
+  ],
+  'CEC': [
+    {r:120, g:255, b:0,   s:'CEC', nombre:'Corrientes Débiles'},
+  ],
+  'CLI': [
+    {r:0,   g:0,   b:255, s:'INY', nombre:'Ductos Inyección'},
+    {r:135, g:150, b:80,  s:'EXT', nombre:'Ductos Extracción'},
+    {r:215, g:0,   b:250, s:'AEX', nombre:'Aire Exterior'},
+    {r:255, g:202, b:202, s:'EXR', nombre:'Aire Graso'},
+    {r:255, g:153, b:0,   s:'RET', nombre:'Aire Retorno'},
+    {r:47,  g:84,  b:150, s:'PRE', nombre:'Presurización'},
+    {r:100, g:30,  b:255, s:'EQC', nombre:'Equipos CLI'},
+    {r:204, g:51,  b:0,   s:'SAC', nombre:'Surtidor Agua Caliente'},
+    {r:244, g:176, b:131, s:'RAC', nombre:'Retorno Agua Caliente'},
+    {r:102, g:204, b:255, s:'SAF', nombre:'Surtidor Agua Fría'},
+    {r:204, g:236, b:255, s:'RAF', nombre:'Retorno Agua Fría'},
+  ],
+  'COM': [
+    {r:255, g:255, b:0,   s:'GAS', nombre:'Gas'},
+  ],
+  'CCT': [
+    {r:30,  g:150, b:240, s:'CCT', nombre:'Control Centralizado'},
+  ],
+  'COR': [
+    {r:255, g:63,  b:0,   s:'LI1', nombre:'Línea 1'},
+    {r:255, g:0,   b:191, s:'LI2', nombre:'Línea 2'},
+    {r:255, g:0,   b:255, s:'MLT', nombre:'Equipos Multilínea'},
+  ],
+  'ALL': [
+    {r:255, g:85,  b:35,  s:'ALL', nombre:'Aguas Lluvias'},
+  ],
+  'GCL': [
+    {r:111, g:0,   b:221, s:'O2',  nombre:'Oxígeno'},
+    {r:0,   g:0,   b:91,  s:'CO2', nombre:'Dióxido de Carbono'},
+    {r:255, g:0,   b:128, s:'N2',  nombre:'Nitrógeno'},
+    {r:233, g:201, b:22,  s:'AM',  nombre:'Aire Medicinal'},
+    {r:74,  g:255, b:74,  s:'AI',  nombre:'Aire Industrial'},
+    {r:128, g:128, b:128, s:'AD',  nombre:'Aire Dental'},
+    {r:0,   g:128, b:128, s:'N2O', nombre:'Óxido Nitroso'},
+    {r:251, g:60,  b:64,  s:'EVG', nombre:'Evacuación Gases'},
+    {r:0,   g:176, b:80,  s:'VAC', nombre:'Vacío'},
+    {r:191, g:127, b:63,  s:'EQG', nombre:'Equipos GCL'},
+  ],
+  'ILU': [
+    {r:75,  g:175, b:80,  s:'ILU', nombre:'Iluminación'},
+  ],
+  'INS': [
+    {r:230, g:230, b:30,  s:'INS', nombre:'Aislación Acústica'},
+  ],
+  'ELE': [
+    {r:0,   g:128, b:0,   s:'ELE', nombre:'Electricidad'},
+  ],
+  'RIE': [
+    {r:120, g:85,  b:70,  s:'RIE', nombre:'Red de Riego'},
+  ],
+  'PCI': [
+    {r:230, g:60,  b:50,  s:'RHU', nombre:'Red Húmeda'},
+    {r:255, g:0,   b:0,   s:'ROC', nombre:'Red Rociadores'},
+    {r:255, g:20,  b:70,  s:'DET', nombre:'Detectores'},
+  ],
+  'LFA': [
+    {r:115, g:115, b:115, s:'LFA', nombre:'Limpiafachada'},
+  ],
+};
 
 // ── Estado ────────────────────────────────────────────────────────────────────
 let allFiles    = [];
@@ -658,9 +749,25 @@ async function analizarPDFs() {
         canvas.height  = viewport.height;
         await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
 
-        const imageB64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+        // Cap de píxeles — Groq rechaza imágenes >33 177 600 px (mismo límite que groq_analyzer.py)
+        const MAX_PIXELS = 33_000_000;
+        let sendCanvas = canvas;
+        if (canvas.width * canvas.height > MAX_PIXELS) {
+          const capScale = Math.sqrt(MAX_PIXELS / (canvas.width * canvas.height));
+          const cw = Math.floor(canvas.width * capScale);
+          const ch = Math.floor(canvas.height * capScale);
+          sendCanvas = document.createElement('canvas');
+          sendCanvas.width  = cw;
+          sendCanvas.height = ch;
+          sendCanvas.getContext('2d').drawImage(canvas, 0, 0, cw, ch);
+        }
+
+        const imageB64      = sendCanvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+        const textSizeCheck = await detectTextSize(page, vp1.width, vp1.height);
+        const colorCheck    = detectColorPalette(canvas, file.name);  // sync — antes de liberar
 
         // Liberar canvas de memoria
+        if (sendCanvas !== canvas) sendCanvas.width = sendCanvas.height = 0;
         canvas.width = canvas.height = 0;
 
         // Enviar al Worker
@@ -679,8 +786,12 @@ async function analizarPDFs() {
         const result = await resp.json();
         if (result.error) throw new Error(result.error);
 
-        // Inyectar check client-side de formato y recalcular puntaje
-        result.resultado.formato_hoja = detectFormat(vp1.width, vp1.height);
+        // Inyectar checks client-side y recalcular puntaje
+        result.resultado.formato_hoja     = detectFormat(vp1.width, vp1.height);
+        result.resultado.tamanio_texto_min = textSizeCheck;
+        result.resultado.paleta_colores    = colorCheck;
+        if (!result.resultado.tabla_revisiones)
+          result.resultado.tabla_revisiones = { presente: null, observacion: 'Pendiente — requiere actualización del Worker' };
         const recalc = recalcularPuntaje(result.resultado);
         result.aprobados = recalc.aprobados;
         result.total     = recalc.total;
@@ -737,9 +848,114 @@ function detectFormat(wPt, hPt) {
   return { presente: false, observacion: `Formato no estándar (${w}×${h} pts)` };
 }
 
+// ── Detectar tamaño mínimo de texto (client-side, pdf.js TextContent) ────────
+async function detectTextSize(page, pageWPt, pageHPt) {
+  const MIN_MM  = 2.0;
+  const PT2MM   = 0.3528;
+  // Excluir zona inferior (≈20% del alto) donde suele estar la viñeta/carátula
+  const vinetaY = pageHPt * 0.20;
+
+  let content;
+  try { content = await page.getTextContent(); }
+  catch (_) { return { presente: null, observacion: 'No se pudo leer el texto del PDF' }; }
+
+  let minPt = Infinity;
+  for (const item of content.items) {
+    if (!item.transform) continue;
+    const sizePt = Math.abs(item.transform[3]);  // scaleY en puntos
+    if (sizePt <= 0) continue;
+    const yPt = item.transform[5];               // posición Y desde abajo
+    if (yPt < vinetaY) continue;                 // saltar zona de viñeta
+    if (sizePt < minPt) minPt = sizePt;
+  }
+
+  if (!isFinite(minPt))
+    return { presente: null, observacion: 'Sin texto en zona interior detectado' };
+
+  const minMm = minPt * PT2MM;
+  return {
+    presente:    minMm >= MIN_MM,
+    observacion: `Mínimo: ${minMm.toFixed(1)} mm (${minPt.toFixed(1)} pts) — umbral ${MIN_MM} mm`,
+  };
+}
+
+// ── Detectar paleta de colores normativa (client-side, canvas pixel sampling) ─
+function detectColorPalette(canvas, fileName) {
+  // 1. Identificar especialidad(es) desde el nombre del archivo
+  //    Soporta patrones como "08CLI", "05ARQ", "ALL", "23PAV-ALL"
+  const nameParts = fileName.toUpperCase().replace(/\.PDF$/i, '').split(/[-_\s]+/);
+  const espCodes  = [];
+  for (const seg of nameParts) {
+    // Acepta "CLI", "08CLI", "23PAV", etc.
+    const code = seg.replace(/^\d+/, '');
+    if (code.length >= 2 && code.length <= 4 && PALETA_NORMATIVA[code] && !espCodes.includes(code))
+      espCodes.push(code);
+  }
+
+  if (!espCodes.length)
+    return { presente: null, observacion: 'Especialidad no identificada en nombre de archivo' };
+
+  // Reunir colores esperados (todas las especialidades encontradas)
+  const palette = espCodes.flatMap(c => PALETA_NORMATIVA[c]);
+  if (!palette.length)
+    return { presente: null, observacion: `Sin paleta definida para ${espCodes.join('+')} (usa materialidad)` };
+
+  // 2. Muestrear píxeles del canvas — excluir zona inferior 20% (viñeta)
+  const w     = canvas.width;
+  const h     = canvas.height;
+  const yMax  = Math.floor(h * 0.80);
+  const step  = Math.max(3, Math.floor(Math.min(w, h) / 120));  // ~14 400 muestras máx.
+
+  let imgData;
+  try { imgData = canvas.getContext('2d').getImageData(0, 0, w, yMax).data; }
+  catch (_) { return { presente: null, observacion: 'No se pudo leer píxeles del canvas' }; }
+
+  // Recolectar colores de píxeles no blancos ni negros
+  const samples = [];
+  for (let y = 0; y < yMax; y += step) {
+    for (let x = 0; x < w; x += step) {
+      const i = (y * w + x) * 4;
+      const r = imgData[i], g = imgData[i+1], b = imgData[i+2], a = imgData[i+3];
+      if (a < 128) continue;
+      const lum = (r + g + b) / 3;
+      if (lum > 235 || lum < 20) continue;   // descartar blanco/negro (fondo y líneas)
+      samples.push([r, g, b]);
+    }
+  }
+
+  if (!samples.length)
+    return { presente: null, observacion: 'Sin píxeles de color en zona de dibujo' };
+
+  // 3. Comparar cada color esperado contra las muestras (distancia euclidiana RGB)
+  //    Tolerancia 45 para absorber artefactos JPEG a 85% calidad
+  const TOL     = 45;
+  const TOL2    = TOL * TOL;
+  const found   = [];
+  const missing = [];
+
+  for (const col of palette) {
+    const hits = samples.some(([r, g, b]) =>
+      (r - col.r) ** 2 + (g - col.g) ** 2 + (b - col.b) ** 2 <= TOL2
+    );
+    (hits ? found : missing).push(col);
+  }
+
+  const pct = Math.round((found.length / palette.length) * 100);
+  const espLabel = espCodes.join('+');
+
+  let obs = `${espLabel} — ${found.length}/${palette.length} colores presentes`;
+  if (missing.length && missing.length <= 5)
+    obs += ` — ausentes: ${missing.map(c => c.nombre).join(', ')}`;
+  else if (missing.length > 5)
+    obs += ` — ${missing.length} colores ausentes`;
+
+  return { presente: pct >= 50, observacion: obs };
+}
+
 // ── Recalcular puntaje local incluyendo checks client-side ────────────────────
 function recalcularPuntaje(resultado) {
   const aplicables = CHECKS.filter(c => {
+    if (c.informativo) return false;          // nunca afectan el puntaje
     const obs = resultado[c.id]?.observacion || '';
     return !obs.startsWith('No aplica');
   });
@@ -844,12 +1060,25 @@ function buildPageCard(r) {
     const list = document.createElement('div');
     list.className = 'checks-list';
 
-    CHECKS.forEach(c => {
+    CHECKS.filter(c => !c.informativo).forEach(c => {
       const v        = r.resultado?.[c.id] || {};
       const noAplica = (v.observacion || '').startsWith('No aplica');
       const icon     = noAplica ? '❕' : v.presente ? '✅' : '❌';
       list.appendChild(buildCheckRow(icon, c.nombre, v.observacion || ''));
     });
+
+    const infoChecks = CHECKS.filter(c => c.informativo);
+    if (infoChecks.length) {
+      const hdr = document.createElement('div');
+      hdr.className   = 'chk-info-hdr';
+      hdr.textContent = 'Indicadores informativos (no afectan puntaje)';
+      list.appendChild(hdr);
+      infoChecks.forEach(c => {
+        const v    = r.resultado?.[c.id] || {};
+        const icon = v.presente === null || v.presente === undefined ? 'ℹ️' : v.presente ? '✅' : '⚠️';
+        list.appendChild(buildCheckRow(icon, c.nombre, v.observacion || ''));
+      });
+    }
 
     resDiv.appendChild(list);
 
@@ -942,7 +1171,7 @@ function buildHeatmapSection(pages) {
   pages.forEach(p => { html += `<th>P${p.pagina}</th>`; });
   html += '</tr></thead><tbody>';
 
-  CHECKS.forEach(c => {
+  CHECKS.filter(c => !c.informativo).forEach(c => {
     html += `<tr><td class="hm-check-name">${c.nombre}</td>`;
     pages.forEach(p => {
       const v        = p.resultado?.[c.id] || {};
@@ -955,6 +1184,25 @@ function buildHeatmapSection(pages) {
     });
     html += '</tr>';
   });
+
+  const infoChecks = CHECKS.filter(c => c.informativo);
+  if (infoChecks.length) {
+    html += `<tr><td class="hm-check-name" colspan="${pages.length + 1}"
+      style="padding-top:7px;padding-bottom:2px;color:var(--accent);opacity:.65;font-size:8px;letter-spacing:.12em;text-transform:uppercase;border-top:1px solid var(--border)">
+      Indicadores informativos</td></tr>`;
+    infoChecks.forEach(c => {
+      html += `<tr><td class="hm-check-name">${c.nombre}</td>`;
+      pages.forEach(p => {
+        const v = p.resultado?.[c.id] || {};
+        if (v.presente === null || v.presente === undefined) {
+          html += `<td class="hm-na">?</td>`;
+        } else {
+          html += `<td class="${v.presente ? 'hm-ok' : 'hm-info'}">${v.presente ? '●' : '○'}</td>`;
+        }
+      });
+      html += '</tr>';
+    });
+  }
 
   html += '</tbody></table></div>';
   sec.innerHTML = html;
