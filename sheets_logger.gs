@@ -1,14 +1,19 @@
 /**
  * VoxelBIM — Google Apps Script Logger
  * ─────────────────────────────────────
- * Despliega este script como Web App en Google Apps Script:
- *   1. Abre script.google.com → Nuevo proyecto
- *   2. Pega este código y guarda
+ * Instrucciones:
+ *   1. Crea una hoja en sheets.google.com y copia su ID desde la URL:
+ *      https://docs.google.com/spreadsheets/d/[ESTE_ES_EL_ID]/edit
+ *   2. Pega el ID en SPREADSHEET_ID (abajo)
  *   3. Implementar → Nueva implementación → Tipo: App web
  *      · Ejecutar como: Yo
  *      · Quién tiene acceso: Cualquier persona
  *   4. Copia la URL generada y pégala en VoxelBIM → ⚙ API Keys → Google Sheets URL
  */
+
+// ▼ PEGA AQUÍ EL ID DE TU GOOGLE SHEET ▼
+const SPREADSHEET_ID = 'PEGA_TU_ID_AQUI';
+// ▲────────────────────────────────────▲
 
 const SHEET_NAME = 'Historial VoxelBIM';
 
@@ -31,7 +36,7 @@ const CHECK_IDS = [
 function doPost(e) {
   try {
     const data  = JSON.parse(e.postData.contents);
-    const ss    = SpreadsheetApp.getActiveSpreadsheet();
+    const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
     let   sheet = ss.getSheetByName(SHEET_NAME);
 
     if (!sheet) {
