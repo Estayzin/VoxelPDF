@@ -624,6 +624,9 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 // URL del Cloudflare Worker. Actualizar tras el deploy.
 const WORKER_URL = 'https://voxelpdf-worker.zinnarox.workers.dev';
 
+// URL del Google Apps Script logger. El localStorage tiene prioridad si el usuario configura la suya.
+const SHEETS_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycby1B2c2cHhNPgF3xyCYDlgUeoiCOpxB0CoBohy6d92e5eu52R45S0nGIH2j-SJlEAst/exec';
+
 // pdf.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -1610,7 +1613,7 @@ function exportarExcel() {
 
 // ── Google Sheets logger ──────────────────────────────────────────────────────
 async function enviarASheets(results) {
-  const url = localStorage.getItem('vx_sheets_url');
+  const url = localStorage.getItem('vx_sheets_url') || SHEETS_URL_DEFAULT;
   if (!url) return;
 
   // Agrupar por PDF y calcular resumen
