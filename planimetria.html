@@ -632,7 +632,7 @@ const CHECKS = [
 
   // ── Indicadores informativos (no afectan puntaje) ────────────────────────
   {id:'tamanio_texto_min', nombre:'Tamaño mínimo de texto (≥ 2 mm)'},
-  {id:'tabla_revisiones',  nombre:'Tabla de revisiones completa',        informativo:true},
+  // {id:'tabla_revisiones', nombre:'Tabla de revisiones completa', informativo:true},  // pendiente implementación en Worker
   {id:'paleta_colores',    nombre:'Simbología de colores en viñeta'},
 ];
 
@@ -984,8 +984,6 @@ async function analizarPDFs() {
         // Inyectar checks client-side y recalcular puntaje
         result.resultado.formato_hoja     = detectFormat(vp1.width, vp1.height);
         result.resultado.tamanio_texto_min = textSizeCheck;
-        if (!result.resultado.tabla_revisiones)
-          result.resultado.tabla_revisiones = { presente: null, observacion: 'Pendiente — requiere actualización del Worker' };
         const recalc = recalcularPuntaje(result.resultado);
         result.aprobados = recalc.aprobados;
         result.total     = recalc.total;
@@ -1075,8 +1073,6 @@ async function reanalyzePage(idx) {
 
     result.resultado.formato_hoja     = detectFormat(vp1.width, vp1.height);
     result.resultado.tamanio_texto_min = textSizeCheck;
-    if (!result.resultado.tabla_revisiones)
-      result.resultado.tabla_revisiones = { presente: null, observacion: 'Pendiente — requiere actualización del Worker' };
     const recalc = recalcularPuntaje(result.resultado);
     result.aprobados = recalc.aprobados; result.total = recalc.total; result.pct = recalc.pct;
     result.img_b64 = imageB64; result._fileIdx = prev._fileIdx;
