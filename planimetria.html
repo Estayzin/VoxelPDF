@@ -418,7 +418,7 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
           </button>
           <button class="btn-reset" id="btnReset" onclick="resetSession()" title="Nueva sesión — limpiar todo" style="display:none">&#10005;</button>
         </div>
-        <div class="sbox" id="logBox">
+        <div class="sbox show" id="logBox">
           <div class="shdr"><div class="spin" id="spin"></div>&nbsp;Log</div>
           <div class="slog" id="logContent"></div>
         </div>
@@ -817,7 +817,7 @@ function resetSession() {
   resList.classList.remove('show');
 
   logContent.innerHTML = '';
-  document.getElementById('logBox').classList.remove('show');
+  document.getElementById('logBox').classList.add('show');
   pwrap.classList.remove('show');
   pbar.style.width = '0%';
 
