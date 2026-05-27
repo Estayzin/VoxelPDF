@@ -74,7 +74,7 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 .btn-otros:hover { background:rgba(100,116,139,.22); box-shadow:none; color:var(--fg); }
 
 /* Lista de PDFs cargados */
-.pdf-list { padding:8px 16px 4px; display:flex; flex-direction:column; gap:4px; }
+.pdf-list { display:none; }
 .pdf-empty { font:400 10px var(--mono); color:var(--border); padding:6px 0; text-align:center; letter-spacing:.05em; }
 .pdf-item  { display:flex; align-items:center; gap:7px; padding:6px 9px; background:var(--navy); border-radius:4px; border:1px solid var(--border); }
 .pdf-icon  { font-size:11px; flex-shrink:0; }
@@ -401,6 +401,7 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
         <div class="res-hdr" style="display:flex;align-items:center;gap:6px;">
           <span style="flex:1">Páginas analizadas</span>
           <span id="resCount" style="font:400 9px var(--mono);color:var(--muted)"></span>
+          <button class="pdf-rm" title="Limpiar resultados" onclick="clearResults()">✕</button>
         </div>
       </div>
 
@@ -797,6 +798,20 @@ function obFinish() {
   closeOnboarding();
 }
 
+// ── Clear results only (keeps loaded files) ────────────────────────────────────
+function clearResults() {
+  lastResults = null;
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+  resList.querySelectorAll('.rcard').forEach(rc => rc.remove());
+  resList.classList.remove('show');
+  resultsView.classList.remove('show');
+  resultsView.innerHTML = '';
+  dropzone.classList.remove('hidden');
+  btnExport.style.display = 'none';
+  const rc = document.getElementById('resCount');
+  if (rc) rc.textContent = '';
+}
+
 // ── Reset session ─────────────────────────────────────────────────────────────
 function resetSession() {
   allFiles    = [];
@@ -965,7 +980,7 @@ async function analizarPDFs() {
   log(`Analizando ${allFiles.length} PDF(s) · ${estPages} pág. · tiempo estimado: ${estStr}`, 'info');
 
   // Limpiar estado anterior
-  resList.innerHTML = `<div class="res-hdr" style="display:flex;align-items:center;gap:6px;"><span style="flex:1">Páginas analizadas</span><span id="resCount" style="font:400 9px var(--mono);color:var(--muted)"></span></div>`;
+  resList.innerHTML = `<div class="res-hdr" style="display:flex;align-items:center;gap:6px;"><span style="flex:1">Páginas analizadas</span><span id="resCount" style="font:400 9px var(--mono);color:var(--muted)"></span><button class="pdf-rm" title="Limpiar resultados" onclick="clearResults()">✕</button></div>`;
   resList.classList.remove('show');
   resultsView.classList.remove('show');
   resultsView.innerHTML = '';
