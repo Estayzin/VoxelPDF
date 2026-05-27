@@ -558,16 +558,15 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
       <!-- Paso 2: API Key -->
       <div id="obStep2" style="display:none">
         <div class="ob-key-note">
-          VoxelBIM usa <strong>Groq</strong> como motor de IA &mdash; es gratuito.<br>
-          Crea tu cuenta y copia tu API Key en<br>
+          <strong style="color:var(--green)">&#10003; Listo para usar</strong> &mdash; el sistema ya tiene una clave Groq configurada.<br><br>
+          <strong>Opcional:</strong> si tienes tu propia cuenta Groq puedes ingresar tu clave para usar tu propia cuota.<br>
           <a href="https://console.groq.com/keys" target="_blank" rel="noopener" class="ob-key-link">console.groq.com/keys</a>
         </div>
         <div class="ob-key-row">
-          <input type="password" id="obGroqKey" placeholder="gsk_…" autocomplete="off" spellcheck="false"
+          <input type="password" id="obGroqKey" placeholder="gsk_… (opcional)" autocomplete="off" spellcheck="false"
                  onkeydown="if(event.key==='Enter') obFinish()">
           <button class="cfg-eye" onclick="togglePwd('obGroqKey',this)" title="Mostrar/ocultar">&#128065;</button>
         </div>
-        <button class="ob-skip" onclick="closeOnboarding()">Ya tengo la clave configurada en el Worker &mdash; saltar</button>
       </div>
 
     </div>
