@@ -1062,9 +1062,11 @@ function buildPageCard(r) {
 
     CHECKS.filter(c => !c.informativo).forEach(c => {
       const v        = r.resultado?.[c.id] || {};
-      const noAplica = (v.observacion || '').startsWith('No aplica');
-      const icon     = noAplica ? '❕' : v.presente ? '✅' : '❌';
-      list.appendChild(buildCheckRow(icon, c.nombre, v.observacion || ''));
+      const obs      = v.observacion || '';
+      const noAplica = obs.startsWith('No aplica');
+      const asIndicated = obs.startsWith('As Indicated');
+      const icon     = noAplica ? '❕' : asIndicated ? '⚠️' : v.presente ? '✅' : '❌';
+      list.appendChild(buildCheckRow(icon, c.nombre, obs));
     });
 
     const infoChecks = CHECKS.filter(c => c.informativo);
@@ -1175,9 +1177,13 @@ function buildHeatmapSection(pages) {
     html += `<tr><td class="hm-check-name">${c.nombre}</td>`;
     pages.forEach(p => {
       const v        = p.resultado?.[c.id] || {};
-      const noAplica = (v.observacion || '').startsWith('No aplica');
+      const obs2       = v.observacion || '';
+      const noAplica   = obs2.startsWith('No aplica');
+      const asIndicated = obs2.startsWith('As Indicated');
       if (noAplica) {
         html += `<td class="hm-na">–</td>`;
+      } else if (asIndicated) {
+        html += `<td class="hm-info">⚠</td>`;
       } else {
         html += `<td class="${v.presente ? 'hm-ok' : 'hm-fail'}">${v.presente ? '●' : '○'}</td>`;
       }
