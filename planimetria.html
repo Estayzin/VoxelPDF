@@ -1262,8 +1262,9 @@ function renderResults(data) {
       section.appendChild(buildPageCard(r));
 
       const pct   = r.pct ?? 0;
-      const color = pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--warn)' : 'var(--red)';
-      const icon  = r.error ? '!' : pct >= 80 ? '✓' : pct >= 50 ? '!' : '✗';
+      const color = r.error ? 'var(--warn)' : pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--warn)' : 'var(--red)';
+      const icon  = r.error ? '⚡' : pct >= 80 ? '✓' : pct >= 50 ? '!' : '✗';
+      const metaTxt = r.error ? `<span style="color:var(--warn)">sin procesar</span>` : pct+'%';
       const rc = document.createElement('div');
       rc.className = 'rcard';
       rc.id = `rc-${r._idx}`;
@@ -1271,7 +1272,7 @@ function renderResults(data) {
         <div class="rbody" style="display:flex;align-items:center;gap:6px;">
           <div style="flex:1;min-width:0;">
             <div class="rname">Pág ${r.pagina} &nbsp;${icon}</div>
-            <div class="rmeta">${pdfName.slice(0,22)}${pdfName.length>22?'…':''} · ${r.error ? 'error' : pct+'%'}</div>
+            <div class="rmeta">${pdfName.slice(0,22)}${pdfName.length>22?'…':''} · ${metaTxt}</div>
           </div>
           ${r.error ? `<button class="rcard-retry" title="Re-analizar esta página" onclick="event.stopPropagation();reanalyzePage(${r._idx})">↺</button>` : ''}
         </div>`;
