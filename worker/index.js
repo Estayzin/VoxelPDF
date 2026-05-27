@@ -23,10 +23,9 @@ const CHECKS = [
   { id: 'legibilidad_ejes' },
 ];
 
-// ── Modelos Groq con visión (se prueban en orden) ─────────────────────────────
+// ── Modelos Groq con visión ───────────────────────────────────────────────────
 const GROQ_MODELS = [
   'meta-llama/llama-4-scout-17b-16e-instruct',
-  'meta-llama/llama-4-maverick-17b-128e-instruct',
 ];
 
 // ── Prompt (igual al groq_analyzer.py) ───────────────────────────────────────
