@@ -122,6 +122,7 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 .conn-row { display:flex; align-items:center; gap:7px; font:400 10px var(--mono); color:var(--muted); }
 .dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
 .dot-ok  { background:var(--green); box-shadow:0 0 5px var(--green); }
+.dot-wrk { background:var(--muted); }
 .dot-err { background:var(--red); }
 
 /* Results list (rcards) */
@@ -242,8 +243,8 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 [data-theme="light"] .btn-cargar.loaded { background:rgba(0,200,83,.12); color:#00c853; border:1px solid rgba(0,200,83,.28); }
 
 /* Botón exportar Excel */
-.btn-export { width:100%; padding:8px; background:transparent; color:var(--muted); border:1px solid var(--border); border-radius:6px; font:600 10px var(--mono); cursor:pointer; transition:all .15s; text-transform:uppercase; letter-spacing:.08em; display:none; }
-.btn-export:hover { border-color:#15803d; color:#15803d; }
+.btn-export { width:100%; padding:9px; background:rgba(21,128,61,.12); color:#00c853; border:1px solid rgba(0,200,83,.3); border-radius:6px; font:700 10px var(--mono); cursor:pointer; transition:all .15s; text-transform:uppercase; letter-spacing:.08em; display:none; }
+.btn-export:hover { background:rgba(21,128,61,.22); border-color:var(--green); box-shadow:0 0 12px rgba(0,200,83,.2); }
 
 /* ── CONFIG SIDEBAR ── */
 .cfg-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100; display:none; }
@@ -421,7 +422,7 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
       <!-- Conexiones -->
       <div class="conn-section">
         <div class="conn-title">API Keys</div>
-        <div class="conn-row"><div class="dot dot-err" id="dotGroq"></div>Groq</div>
+        <div class="conn-row"><div class="dot dot-wrk" id="dotGroq"></div><span id="dotGroqLabel">Groq · Worker</span></div>
       </div>
 
       <!-- Exportar -->
@@ -780,7 +781,9 @@ function init() {
 }
 
 function updateDots() {
-  dotGroq.className = localStorage.getItem('vx_groq_key') ? 'dot dot-ok' : 'dot dot-err';
+  const hasOwn = !!localStorage.getItem('vx_groq_key');
+  dotGroq.className = hasOwn ? 'dot dot-ok' : 'dot dot-wrk';
+  document.getElementById('dotGroqLabel').textContent = hasOwn ? 'Groq · clave propia' : 'Groq · Worker';
 }
 
 // ── Log ───────────────────────────────────────────────────────────────────────
