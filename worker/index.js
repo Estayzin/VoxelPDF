@@ -1,11 +1,10 @@
 /**
  * VoxelPDF — Cloudflare Worker
- * Proxy para Groq y Gemini. Recibe imagen base64 del browser,
+ * Proxy para Groq. Recibe imagen base64 del browser,
  * llama a la API de IA y devuelve el resultado de análisis.
  *
  * Variables de entorno (Cloudflare Dashboard > Workers > Settings):
- *   GROQ_API_KEY   — clave de Groq (fallback si el cliente no envía la suya)
- *   GEMINI_API_KEY — clave de Gemini (fallback si el cliente no envía la suya)
+ *   GROQ_API_KEY — clave de Groq (fallback si el cliente no envía la suya)
  */
 
 // ── Checks (mismo orden que el frontend) ──────────────────────────────────────
@@ -113,38 +112,6 @@ async function callGroq(imageB64, pdfName, apiKey) {
   throw new Error('Todos los modelos Groq agotaron su límite de tokens. Intenta en unos minutos.');
 }
 
-// ── Llamada a Gemini ──────────────────────────────────────────────────────────
-async function callGemini(imageB64, apiKey) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`;
-
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{
-        parts: [
-          { inlineData: { mimeType: 'image/jpeg', data: imageB64 } },
-          { text: PROMPT },
-        ],
-      }],
-      generationConfig: { temperature: 0.1 },
-    }),
-  });
-
-  if (!resp.ok) {
-    const body = await resp.text().catch(() => '');
-    throw new Error(`Gemini ${resp.status}: ${body.slice(0, 200)}`);
-  }
-
-  const data = await resp.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-  if (!text) throw new Error('Respuesta vacía de Gemini');
-
-  const match = text.match(/\{[\s\S]*\}/);
-  if (match) return JSON.parse(match[0]);
-  throw new Error('Respuesta inesperada de Gemini (no es JSON)');
-}
-
 // ── Headers CORS ──────────────────────────────────────────────────────────────
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -172,23 +139,15 @@ export default {
       });
 
     try {
-      const { image_b64, engine = 'groq', api_key, page_num = 1, pdf_name = '' } =
+      const { image_b64, api_key, page_num = 1, pdf_name = '' } =
         await request.json();
 
       if (!image_b64) return json({ error: 'image_b64 es requerido' }, 400);
 
-      let resultado;
+      const key = api_key || env.GROQ_API_KEY;
+      if (!key) return json({ error: 'GROQ_API_KEY no configurada' }, 400);
 
-      if (engine === 'gemini') {
-        const key = api_key || env.GEMINI_API_KEY;
-        if (!key) return json({ error: 'GEMINI_API_KEY no configurada' }, 400);
-        resultado = await callGemini(image_b64, key);
-      } else {
-        // groq (default)
-        const key = api_key || env.GROQ_API_KEY;
-        if (!key) return json({ error: 'GROQ_API_KEY no configurada' }, 400);
-        resultado = await callGroq(image_b64, pdf_name, key);
-      }
+      const resultado = await callGroq(image_b64, pdf_name, key);
 
       const { aprobados, total } = calcularPuntaje(resultado);
       const pct = total > 0 ? Math.round((aprobados / total) * 100) : 0;

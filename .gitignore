@@ -1,4 +1,5 @@
 .env
+worker/.dev.vars
 __pycache__/
 *.pyc
 *.pyo

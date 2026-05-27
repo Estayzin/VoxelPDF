@@ -354,8 +354,7 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
       <div>
         <div class="sb-title" style="margin-bottom:6px">Motor de análisis</div>
         <div class="engine-opts">
-          <label class="eopt"><input type="radio" name="motor" value="groq" checked onchange="updateMotorLabel()"> Groq (IA gratuita)</label>
-          <label class="eopt"><input type="radio" name="motor" value="gemini" onchange="updateMotorLabel()"> Gemini</label>
+          <label class="eopt"><input type="radio" name="motor" value="groq" checked> Groq (IA gratuita)</label>
         </div>
       </div>
 
@@ -375,7 +374,6 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
       <div class="conn-section">
         <div class="conn-title">API Keys</div>
         <div class="conn-row"><div class="dot dot-err" id="dotGroq"></div>Groq</div>
-        <div class="conn-row"><div class="dot dot-err" id="dotGemini"></div>Gemini</div>
       </div>
 
       <!-- Exportar -->
@@ -459,14 +457,6 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
       </div>
     </div>
 
-    <div class="cfg-field">
-      <div class="cfg-label">Gemini API Key</div>
-      <div class="cfg-row">
-        <input type="password" id="cfgGemini" placeholder="AIza…" autocomplete="off" spellcheck="false">
-        <button class="cfg-eye" onclick="togglePwd('cfgGemini',this)" title="Mostrar/ocultar">&#128065;</button>
-      </div>
-    </div>
-
     <button class="cfg-save" onclick="saveConfig()">Guardar</button>
     <div id="cfgMsg" class="cfg-msg"></div>
   </div>
@@ -477,7 +467,7 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 
 // ── Config ────────────────────────────────────────────────────────────────────
 // URL del Cloudflare Worker. Actualizar tras el deploy.
-const WORKER_URL = 'https://voxelpdf-worker.YOUR_SUBDOMAIN.workers.dev';
+const WORKER_URL = 'https://voxelpdf-worker.zinnarox.workers.dev';
 
 // pdf.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -512,7 +502,6 @@ const pwrap       = document.getElementById('pwrap');
 const pbar        = document.getElementById('pbar');
 const spin        = document.getElementById('spin');
 const dotGroq     = document.getElementById('dotGroq');
-const dotGemini   = document.getElementById('dotGemini');
 const btnAnalyze  = document.getElementById('btnAnalyze');
 const btnExport   = document.getElementById('btnExport');
 
@@ -522,8 +511,7 @@ function init() {
 }
 
 function updateDots() {
-  dotGroq.className   = localStorage.getItem('vx_groq_key')   ? 'dot dot-ok' : 'dot dot-err';
-  dotGemini.className = localStorage.getItem('vx_gemini_key') ? 'dot dot-ok' : 'dot dot-err';
+  dotGroq.className = localStorage.getItem('vx_groq_key') ? 'dot dot-ok' : 'dot dot-err';
 }
 
 // ── Log ───────────────────────────────────────────────────────────────────────
@@ -605,23 +593,20 @@ function dzDrop(e)  {
 
 // ── Motor label ───────────────────────────────────────────────────────────────
 function updateMotorLabel() {
-  const mode = document.querySelector('input[name="motor"]:checked').value;
-  const labels = { groq: 'Groq (IA gratuita)', gemini: 'Gemini' };
   document.getElementById('hsubMotor').textContent =
-    `Análisis de láminas PDF · Motor: ${labels[mode] || mode}`;
+    'Análisis de láminas PDF · Motor: Groq (IA gratuita)';
 }
 
 // ── Análisis (pdf.js client-side + Cloudflare Worker) ────────────────────────
 async function analizarPDFs() {
   if (!allFiles.length) return;
 
-  const engine = document.querySelector('input[name="motor"]:checked').value;
+  const engine = 'groq';
   const dpi    = parseInt(document.getElementById('dpiSlider').value);
   const scale  = dpi / 72;
 
   // Clave personal (opcional — el Worker usa la suya si no se envía)
-  const keyField = engine === 'gemini' ? 'vx_gemini_key' : 'vx_groq_key';
-  const apiKey   = localStorage.getItem(keyField) || '';
+  const apiKey = localStorage.getItem('vx_groq_key') || '';
 
   btnAnalyze.disabled = true;
   spin.classList.add('show');
@@ -998,10 +983,8 @@ function openConfig() {
   document.getElementById('cfgOverlay').classList.add('open');
   document.getElementById('cfgPanel').classList.add('open');
 
-  const groq   = localStorage.getItem('vx_groq_key');
-  const gemini = localStorage.getItem('vx_gemini_key');
-  if (groq)   document.getElementById('cfgGroq').placeholder   = groq.slice(0, 8)   + '… (guardada)';
-  if (gemini) document.getElementById('cfgGemini').placeholder = gemini.slice(0, 8) + '… (guardada)';
+  const groq = localStorage.getItem('vx_groq_key');
+  if (groq) document.getElementById('cfgGroq').placeholder = groq.slice(0, 8) + '… (guardada)';
 }
 
 function closeConfig() {
@@ -1019,21 +1002,18 @@ function togglePwd(id, btn) {
 }
 
 function saveConfig() {
-  const groqVal   = document.getElementById('cfgGroq').value.trim();
-  const geminiVal = document.getElementById('cfgGemini').value.trim();
-  const msg       = document.getElementById('cfgMsg');
+  const groqVal = document.getElementById('cfgGroq').value.trim();
+  const msg     = document.getElementById('cfgMsg');
 
-  if (!groqVal && !geminiVal) {
+  if (!groqVal) {
     msg.className   = 'cfg-msg err';
     msg.textContent = 'Ingresa al menos una clave';
     return;
   }
 
-  if (groqVal)   localStorage.setItem('vx_groq_key',   groqVal);
-  if (geminiVal) localStorage.setItem('vx_gemini_key', geminiVal);
+  if (groqVal) localStorage.setItem('vx_groq_key', groqVal);
 
-  document.getElementById('cfgGroq').value   = '';
-  document.getElementById('cfgGemini').value = '';
+  document.getElementById('cfgGroq').value = '';
   msg.className   = 'cfg-msg ok';
   msg.textContent = 'Guardado ✓';
   updateDots();
