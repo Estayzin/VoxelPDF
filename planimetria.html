@@ -188,6 +188,7 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 .hm-check-name { text-align:left !important; color:var(--text); white-space:nowrap; font-size:9px; }
 .hm-ok   { background:rgba(0,200,83,.25);  color:#00c853; }
 .hm-fail { background:rgba(255,61,87,.18); color:#ff3d57; }
+.hm-na   { background:rgba(74,96,128,.12); color:var(--muted); }
 
 /* Global metrics */
 .metrics-section { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:18px 20px; }
@@ -211,6 +212,7 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 [data-theme="light"] body { background:var(--bg); color:var(--text); }
 [data-theme="light"] .hm-ok   { background:rgba(21,128,61,.18);  color:#15803d; }
 [data-theme="light"] .hm-fail { background:rgba(220,38,38,.12);  color:#dc2626; }
+[data-theme="light"] .hm-na   { background:rgba(100,116,139,.1); color:#64748b; }
 [data-theme="light"] .log-ok  { color:#15803d; }
 [data-theme="light"] .log-err { color:#dc2626; }
 [data-theme="light"] .log-warn{ color:#c2410c; }
@@ -475,16 +477,18 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 
 // CHECKS (mismo orden que el Worker)
 const CHECKS = [
-  {id:'vineta_keywords',  nombre:'Viñeta / Carátula'},
-  {id:'vineta_ubicacion', nombre:'Viñeta en zona correcta'},
-  {id:'numero_lamina',    nombre:'Número de lámina'},
-  {id:'escala_numerica',  nombre:'Escala numérica'},
-  {id:'orientacion_norte',nombre:'Orientación / Norte'},
-  {id:'nombres_ambientes',nombre:'Nomenclatura de ambientes'},
-  {id:'cotas_dimensiones',nombre:'Cotas / dimensiones'},
-  {id:'densidad_grafica', nombre:'Grafismo / contenido gráfico'},
-  {id:'densidad_texto',   nombre:'Etiquetas y texto distribuido'},
-  {id:'contenido_central',nombre:'Contenido en zona de dibujo'},
+  {id:'vineta_keywords',    nombre:'Viñeta / Carátula'},
+  {id:'vineta_ubicacion',   nombre:'Viñeta en zona correcta'},
+  {id:'numero_lamina',      nombre:'Número de lámina'},
+  {id:'escala_numerica',    nombre:'Escala numérica'},
+  {id:'orientacion_norte',  nombre:'Orientación / Norte'},
+  {id:'nombres_ambientes',  nombre:'Nomenclatura de ambientes'},
+  {id:'cotas_dimensiones',  nombre:'Cotas / dimensiones'},
+  {id:'densidad_grafica',   nombre:'Grafismo / contenido gráfico'},
+  {id:'densidad_texto',     nombre:'Etiquetas y texto distribuido'},
+  {id:'contenido_central',  nombre:'Contenido en zona de dibujo'},
+  {id:'concordancia_nombre',nombre:'Código lámina vs nombre archivo'},
+  {id:'formato_hoja',       nombre:'Formato de hoja (A0–A4)'},
 ];
 
 // ── Estado ────────────────────────────────────────────────────────────────────
@@ -646,6 +650,7 @@ async function analizarPDFs() {
 
         // Renderizar página a canvas
         const page     = await pdf.getPage(pageNum);
+        const vp1      = page.getViewport({ scale: 1.0 });   // dimensiones reales en pts
         const viewport = page.getViewport({ scale });
         const canvas   = document.createElement('canvas');
         canvas.width   = viewport.width;
@@ -673,6 +678,13 @@ async function analizarPDFs() {
         const result = await resp.json();
         if (result.error) throw new Error(result.error);
 
+        // Inyectar check client-side de formato y recalcular puntaje
+        result.resultado.formato_hoja = detectFormat(vp1.width, vp1.height);
+        const recalc = recalcularPuntaje(result.resultado);
+        result.aprobados = recalc.aprobados;
+        result.total     = recalc.total;
+        result.pct       = recalc.pct;
+
         result.img_b64 = imageB64; // guardar para mostrar miniatura
         accResults.push(result);
         processed++;
@@ -699,6 +711,40 @@ async function analizarPDFs() {
 }
 
 function setProgress(pct) { pbar.style.width = pct + '%'; }
+
+// ── Detectar formato de hoja (client-side, a partir de dimensiones pdf.js) ────
+function detectFormat(wPt, hPt) {
+  // Tamaños en puntos PDF (1 pt = 1/72 pulgada), tolerancia ±8 pts
+  const FORMATS = [
+    { name: 'A4',      w: 595,  h: 842  },
+    { name: 'A3',      w: 842,  h: 1191 },
+    { name: 'A2',      w: 1191, h: 1684 },
+    { name: 'A1',      w: 1684, h: 2384 },
+    { name: 'A0',      w: 2384, h: 3370 },
+    { name: 'Letter',  w: 612,  h: 792  },
+    { name: 'Legal',   w: 612,  h: 1008 },
+    { name: 'Tabloid', w: 792,  h: 1224 },
+  ];
+  const TOL = 8;
+  const w = Math.round(wPt), h = Math.round(hPt);
+  for (const f of FORMATS) {
+    if (Math.abs(w - f.w) <= TOL && Math.abs(h - f.h) <= TOL)
+      return { presente: true,  observacion: `${f.name} vertical (${w}×${h} pts)` };
+    if (Math.abs(w - f.h) <= TOL && Math.abs(h - f.w) <= TOL)
+      return { presente: true,  observacion: `${f.name} horizontal (${w}×${h} pts)` };
+  }
+  return { presente: false, observacion: `Formato no estándar (${w}×${h} pts)` };
+}
+
+// ── Recalcular puntaje local incluyendo checks client-side ────────────────────
+function recalcularPuntaje(resultado) {
+  const aplicables = CHECKS.filter(c => {
+    const obs = resultado[c.id]?.observacion || '';
+    return !obs.startsWith('No aplica');
+  });
+  const aprobados = aplicables.filter(c => resultado[c.id]?.presente === true).length;
+  return { aprobados, total: aplicables.length, pct: aplicables.length > 0 ? Math.round((aprobados / aplicables.length) * 100) : 0 };
+}
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function renderResults(data) {
@@ -798,8 +844,9 @@ function buildPageCard(r) {
     list.className = 'checks-list';
 
     CHECKS.forEach(c => {
-      const v    = r.resultado?.[c.id] || {};
-      const icon = v.presente ? '✅' : '❌';
+      const v        = r.resultado?.[c.id] || {};
+      const noAplica = (v.observacion || '').startsWith('No aplica');
+      const icon     = noAplica ? '❕' : v.presente ? '✅' : '❌';
       list.appendChild(buildCheckRow(icon, c.nombre, v.observacion || ''));
     });
 
@@ -897,8 +944,13 @@ function buildHeatmapSection(pages) {
   CHECKS.forEach(c => {
     html += `<tr><td class="hm-check-name">${c.nombre}</td>`;
     pages.forEach(p => {
-      const ok = p.resultado?.[c.id]?.presente || false;
-      html += `<td class="${ok ? 'hm-ok' : 'hm-fail'}">${ok ? '●' : '○'}</td>`;
+      const v        = p.resultado?.[c.id] || {};
+      const noAplica = (v.observacion || '').startsWith('No aplica');
+      if (noAplica) {
+        html += `<td class="hm-na">–</td>`;
+      } else {
+        html += `<td class="${v.presente ? 'hm-ok' : 'hm-fail'}">${v.presente ? '●' : '○'}</td>`;
+      }
     });
     html += '</tr>';
   });
