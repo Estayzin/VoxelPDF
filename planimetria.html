@@ -881,6 +881,7 @@ async function analizarPDFs() {
   const apiKey = localStorage.getItem('vx_groq_key') || '';
 
   btnAnalyze.disabled = true;
+  btnAnalyze.innerHTML = '&#128269;&nbsp; Analizando…';
   spin.classList.add('show');
   pwrap.classList.add('show');
   setProgress(5);
@@ -1018,6 +1019,7 @@ async function analizarPDFs() {
     }
   } finally {
     btnAnalyze.disabled = false;
+    btnAnalyze.innerHTML = '&#128269;&nbsp; Re-analizar todo';
     spin.classList.remove('show');
     setTimeout(() => { pwrap.classList.remove('show'); setProgress(0); }, 1400);
   }
