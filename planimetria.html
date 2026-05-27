@@ -100,6 +100,8 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 .btn-gen { width:100%; padding:9px; background:rgba(0,212,255,.08); color:var(--accent); border:1px solid rgba(0,212,255,.25); border-radius:6px; font:700 11px var(--mono); cursor:pointer; transition:all .15s; text-transform:uppercase; letter-spacing:.1em; }
 .btn-gen:hover:not(:disabled) { background:rgba(0,212,255,.14); border-color:var(--accent); box-shadow:0 0 12px rgba(0,212,255,.2); }
 .btn-gen:disabled { background:#1a2a40; color:var(--muted); border-color:transparent; cursor:not-allowed; }
+.btn-reset { padding:9px 11px; background:transparent; color:var(--muted); border:1px solid var(--border); border-radius:6px; font:700 12px var(--mono); cursor:pointer; transition:all .15s; flex-shrink:0; line-height:1; }
+.btn-reset:hover { border-color:var(--red); color:var(--red); }
 
 /* Log box */
 .sbox { display:none; background:var(--blue); border-radius:6px; overflow:hidden; border:1px solid var(--border); }
@@ -409,9 +411,12 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 
       <!-- Analizar + log + progress -->
       <div style="display:flex;flex-direction:column;gap:6px">
-        <button class="btn-gen" id="btnAnalyze" disabled onclick="analizarPDFs()">
-          &#128269;&nbsp; Analizar todo
-        </button>
+        <div style="display:flex;gap:5px;">
+          <button class="btn-gen" id="btnAnalyze" disabled onclick="analizarPDFs()" style="flex:1">
+            &#128269;&nbsp; Analizar todo
+          </button>
+          <button class="btn-reset" id="btnReset" onclick="resetSession()" title="Nueva sesión — limpiar todo" style="display:none">&#10005;</button>
+        </div>
         <div class="sbox" id="logBox">
           <div class="shdr"><div class="spin" id="spin"></div>&nbsp;Log</div>
           <div class="slog" id="logContent"></div>
@@ -773,6 +778,37 @@ function obFinish() {
   closeOnboarding();
 }
 
+// ── Reset session ─────────────────────────────────────────────────────────────
+function resetSession() {
+  allFiles    = [];
+  lastResults = null;
+
+  // UI estado inicial
+  resultsView.innerHTML = '';
+  resultsView.classList.remove('show');
+  dropzone.classList.remove('hidden');
+  resList.querySelectorAll('.rcard').forEach(rc => rc.remove());
+  resList.classList.remove('show');
+
+  logContent.innerHTML = '';
+  document.getElementById('logBox').classList.remove('show');
+  pwrap.classList.remove('show');
+  pbar.style.width = '0%';
+
+  btnAnalyze.disabled = true;
+  btnAnalyze.innerHTML = '&#128269;&nbsp; Analizar todo';
+  document.getElementById('btnReset').style.display = 'none';
+  btnExport.style.display = 'none';
+
+  const btnCargar = document.getElementById('btnCargar');
+  btnCargar.classList.remove('loaded');
+  btnCargar.innerHTML = '&#128194;&nbsp; Abrir PDF(s)';
+
+  document.getElementById('pdfList').innerHTML =
+    '<div class="pdf-empty" id="pdfEmpty">Sin archivos cargados</div>';
+  document.getElementById('fi').value = '';
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 function init() {
   updateDots();
@@ -807,6 +843,7 @@ function handleFiles(files) {
 
   renderPdfList();
   btnAnalyze.disabled = false;
+  document.getElementById('btnReset').style.display = '';
 
   const btn = document.getElementById('btnCargar');
   btn.classList.add('loaded');
