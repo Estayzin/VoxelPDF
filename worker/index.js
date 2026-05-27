@@ -20,6 +20,7 @@ const CHECKS = [
   { id: 'densidad_texto' },
   { id: 'contenido_central' },
   { id: 'concordancia_nombre' },
+  { id: 'legibilidad_ejes' },
 ];
 
 // ── Modelos Groq con visión (se prueban en orden) ─────────────────────────────
@@ -43,6 +44,7 @@ const PROMPT = `Eres un revisor experto en planimetría arquitectónica latinoam
   "densidad_texto":    {"presente": true,  "observacion": "comentario breve"},
   "contenido_central":   {"presente": true,  "observacion": "comentario breve"},
   "concordancia_nombre": {"presente": true,  "observacion": "comentario breve"},
+  "legibilidad_ejes":    {"presente": true,  "observacion": "comentario breve"},
   "resumen": "Una oración sobre el estado general del plano"
 }
 
@@ -58,6 +60,7 @@ Criterios:
 - densidad_texto: ¿Hay texto distribuido en la ZONA DE DIBUJO del plano (fuera de la viñeta)? NO cuentes el texto que está únicamente dentro de la viñeta/carátula. Si la lámina parece en blanco o el único texto visible es la viñeta, marca false.
 - contenido_central: ¿La zona de dibujo de la lámina tiene contenido gráfico distribuido? Marca presente=true si hay líneas o dibujo técnico en AL MENOS 2 zonas distintas de la hoja. Solo marca false si la lámina parece completamente en blanco.
 - concordancia_nombre: Usando el nombre del archivo PDF indicado al final del mensaje, ¿el código o número de lámina visible en el plano (en viñeta u otro lugar) corresponde o guarda relación con ese nombre de archivo? Si el nombre no contiene un código reconocible (ej: "scan_001", "documento", solo números), marca presente=true con "Nombre genérico, sin código comparable". Si el nombre contiene un código (A-101, PL-02, E-03, ARQ-001, etc.), verifica si ese código aparece en el plano. Marca false solo si hay un código claro en el nombre pero no aparece en el plano.
+- legibilidad_ejes: Si la lámina es un plano topográfico, plano de ubicación/emplazamiento, cuadro, tabla o perspectiva sin grilla estructural → marca presente=true con "No aplica — lámina tipo [X]". Para plantas y cortes/elevaciones con grilla de ejes: evalúa si los ejes (círculos o burbuja con número o letra en los extremos de la grilla) son legibles. Marca false si: (a) los círculos de eje se solapan entre sí o con cotas/texto cercano, (b) el texto dentro de la burbuja es ilegible o está tapado, (c) los ejes están tan juntos que sus burbujas se tocan o cruzan. Marca true si todos los ejes visibles son claramente legibles y no se solapan.
 
 Responde SOLO con el JSON, sin texto adicional.`;
 
