@@ -1,0 +1,7 @@
+name = "voxelpdf-worker"
+main = "index.js"
+compatibility_date = "2024-09-23"
+
+# Variables de entorno: configurar en Cloudflare Dashboard
+# Workers > voxelpdf-worker > Settings > Variables and Secrets
+# Agregar: GROQ_API_KEY y GEMINI_API_KEY como Secret

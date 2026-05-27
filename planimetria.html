@@ -1,0 +1,1053 @@
+<!--
+  ============================================================
+  Revisor de Planimetría — Módulo VoxelBIM
+  Análisis de láminas PDF con IA (Groq / Gemini)
+  Procesamiento client-side con pdf.js + Cloudflare Worker
+  ============================================================
+-->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VoxelBIM — Revisor de Planimetría</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root {
+  --navy:#060d18; --blue:#0a1628; --accent:#00d4ff; --green:#00c853;
+  --bg:#0a0f1e; --card:#0d1526; --text:#c8d8f0; --muted:#4a6080; --border:#1a2a40;
+  --mono:'JetBrains Mono',monospace; --sans:'Syne',sans-serif;
+  --warn:#ff6b35; --red:#ff3d57;
+}
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html,body { height:100%; overflow:hidden; }
+body { font-family:var(--sans); background:var(--bg); color:var(--text); display:flex; flex-direction:column; height:100vh; font-size:13px; }
+
+/* ── HEADER ── */
+header { background:var(--navy); padding:16px 24px; min-height:72px; display:flex; align-items:center; gap:14px; border-bottom:2px solid var(--accent); flex-shrink:0; box-shadow:0 2px 20px rgba(0,212,255,.08); }
+.hicon { width:34px; height:34px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.htitle { font:700 13px var(--mono); color:#e0f0ff; letter-spacing:.05em; text-transform:uppercase; }
+.hsub   { font:400 10px var(--mono); color:var(--muted); margin-top:1px; }
+.hback  { padding:5px 12px; background:transparent; color:var(--muted); border:1px solid var(--border); border-radius:4px; font:600 9px var(--mono); text-transform:uppercase; letter-spacing:.1em; text-decoration:none; transition:all .15s; cursor:pointer; white-space:nowrap; }
+.hback:hover { border-color:var(--accent); color:var(--accent); }
+
+/* BIT animations */
+@keyframes bit-pulse  { 0%,100%{opacity:.95} 50%{opacity:.15} }
+@keyframes bit-edge-a { 0%,100%{opacity:1;stroke-width:2.4} 45%{opacity:.1;stroke-width:.4} 65%{opacity:.9;stroke-width:2.0} }
+@keyframes bit-edge-b { 0%,100%{opacity:1;stroke-width:1.6} 45%{opacity:.1;stroke-width:.4} 65%{opacity:.8;stroke-width:1.4} }
+@keyframes bit-glow   { 0%,100%{opacity:.22} 50%{opacity:.55} }
+@keyframes bit-vtx    { 0%,100%{opacity:.5}  50%{opacity:.08} }
+@keyframes bit-vtx2   { 0%,100%{opacity:.65} 50%{opacity:.15} }
+.bit-wrap    { transform-origin:45px 52px; }
+.bit-top     { animation:bit-pulse  2s ease-in-out infinite; }
+.bit-edge1   { animation:bit-edge-a 2s ease-in-out infinite; }
+.bit-edge2   { animation:bit-edge-b 2s ease-in-out infinite .15s; }
+.bit-face    { animation:bit-glow   2s ease-in-out infinite; }
+.bit-vtx-mid { animation:bit-vtx   2s ease-in-out infinite; }
+.bit-vtx-bot { animation:bit-vtx2  2s ease-in-out infinite .3s; }
+
+/* ── WORKSPACE ── */
+.workspace { display:flex; flex:1; overflow:hidden; }
+
+/* ── PANEL IZQUIERDO ── */
+.panel-left { width:280px; flex-shrink:0; display:flex; flex-direction:column; border-right:1px solid var(--border); background:var(--blue); overflow:hidden; }
+.sb-title   { font:700 9px var(--mono); color:var(--muted); text-transform:uppercase; letter-spacing:.2em; }
+
+/* Zona superior — scrollable */
+.pl-top { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
+
+/* Zona inferior — fija */
+.pl-bottom { flex-shrink:0; border-top:2px solid var(--border); background:var(--navy); display:flex; flex-direction:column; gap:10px; padding:14px 16px; }
+
+/* Secciones genéricas */
+.pl-section { display:flex; flex-direction:column; gap:6px; padding:12px 16px 0; }
+.pl-section:first-child { padding-top:14px; }
+
+/* Botón upload */
+.btn-cargar { width:100%; padding:10px; background:var(--accent); color:#000; border:none; border-radius:6px; font:700 11px var(--mono); cursor:pointer; letter-spacing:.08em; text-transform:uppercase; transition:all .15s; display:flex; align-items:center; justify-content:center; gap:8px; }
+.btn-cargar:hover { background:#00bcd4; box-shadow:0 0 20px rgba(0,212,255,.3); }
+.btn-cargar.loaded { background:rgba(0,200,83,.12); color:var(--green); border:1px solid rgba(0,200,83,.28); }
+
+/* Lista de PDFs cargados */
+.pdf-list { padding:8px 16px 4px; display:flex; flex-direction:column; gap:4px; }
+.pdf-empty { font:400 10px var(--mono); color:var(--border); padding:6px 0; text-align:center; letter-spacing:.05em; }
+.pdf-item  { display:flex; align-items:center; gap:7px; padding:6px 9px; background:var(--navy); border-radius:4px; border:1px solid var(--border); }
+.pdf-icon  { font-size:11px; flex-shrink:0; }
+.pdf-name  { font:600 10px var(--mono); color:var(--text); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pdf-size  { font:400 9px var(--mono); color:var(--muted); flex-shrink:0; }
+.pdf-rm    { background:none; border:none; color:var(--muted); cursor:pointer; font-size:13px; line-height:1; padding:0 2px; flex-shrink:0; transition:color .15s; }
+.pdf-rm:hover { color:var(--red); }
+
+/* DPI */
+.dpi-row { display:flex; align-items:center; gap:10px; }
+.dpi-row input[type=range] { flex:1; accent-color:var(--accent); }
+.dpi-val { font:600 11px var(--mono); color:var(--accent); white-space:nowrap; }
+
+/* Engine radio */
+.engine-opts { display:flex; flex-direction:column; gap:4px; }
+.eopt { display:flex; align-items:center; gap:8px; padding:7px 10px; background:var(--blue); border-radius:4px; border:1px solid var(--border); cursor:pointer; transition:all .15s; font:500 11px var(--mono); color:var(--text); }
+.eopt:hover { border-color:var(--accent); }
+.eopt input[type=radio] { accent-color:var(--accent); flex-shrink:0; }
+
+/* Analyze button */
+.btn-gen { width:100%; padding:10px; background:linear-gradient(135deg,var(--green),#00a844); color:#000; border:none; border-radius:6px; font:700 11px var(--mono); cursor:pointer; transition:all .15s; text-transform:uppercase; letter-spacing:.1em; box-shadow:0 0 15px rgba(0,200,83,.2); }
+.btn-gen:hover:not(:disabled) { box-shadow:0 0 25px rgba(0,200,83,.4); transform:translateY(-1px); }
+.btn-gen:disabled { background:#1a2a40; color:var(--muted); cursor:not-allowed; box-shadow:none; }
+
+/* Log box */
+.sbox { display:none; background:var(--blue); border-radius:6px; overflow:hidden; border:1px solid var(--border); }
+.sbox.show { display:block; }
+.shdr { padding:5px 10px; background:rgba(0,212,255,.04); font:600 9px var(--mono); color:var(--accent); text-transform:uppercase; letter-spacing:.12em; display:flex; align-items:center; gap:6px; }
+.slog { padding:6px 10px; font:400 10px var(--mono); color:#4a8090; max-height:80px; overflow-y:auto; line-height:1.9; }
+.log-ok{color:#00c853} .log-warn{color:#ff6b35} .log-err{color:#ff3d57} .log-info{color:#00d4ff}
+.spin { width:10px; height:10px; border:2px solid rgba(138,171,204,.3); border-top-color:#8aabcc; border-radius:50%; animation:spin .8s linear infinite; display:none; flex-shrink:0; }
+.spin.show { display:inline-block; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* Progress */
+.pwrap { height:3px; background:rgba(255,255,255,.08); display:none; border-radius:2px; overflow:hidden; }
+.pwrap.show { display:block; }
+.pbar { height:100%; background:linear-gradient(90deg,var(--accent),#00bcd4); width:0%; transition:width .4s ease; }
+
+/* Connection dots */
+.conn-section { background:var(--blue); border-radius:6px; border:1px solid var(--border); padding:8px 12px; display:flex; flex-direction:column; gap:5px; }
+.conn-title { font:600 9px var(--mono); color:var(--muted); text-transform:uppercase; letter-spacing:.15em; margin-bottom:2px; }
+.conn-row { display:flex; align-items:center; gap:7px; font:400 10px var(--mono); color:var(--muted); }
+.dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.dot-ok  { background:var(--green); box-shadow:0 0 5px var(--green); }
+.dot-err { background:var(--red); }
+
+/* Results list (rcards) */
+.res { display:none; padding:0 16px 16px; }
+.res.show { display:block; }
+.res-hdr { font:700 9px var(--mono); color:var(--muted); text-transform:uppercase; letter-spacing:.2em; padding:14px 0 8px; }
+.rcard { background:var(--card); border-radius:6px; overflow:hidden; margin-bottom:4px; display:flex; align-items:stretch; cursor:pointer; transition:all .15s; border:1px solid var(--border); }
+.rcard:hover { border-color:var(--accent); box-shadow:0 0 10px rgba(0,212,255,.12); transform:translateX(2px); }
+.rcard.active { border-color:var(--accent); }
+.racc  { width:3px; align-self:stretch; flex-shrink:0; }
+.rbody { padding:7px 11px; flex:1; min-width:0; }
+.rname { font:600 11px var(--mono); color:var(--text); letter-spacing:.02em; }
+.rmeta { font:400 9px var(--mono); color:var(--muted); margin-top:2px; }
+
+/* ── PANEL DERECHO ── */
+.panel-right { flex:1; display:flex; flex-direction:column; overflow:hidden; background:var(--bg); position:relative; }
+
+/* Drop zone */
+#dropzone { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:10; cursor:pointer; transition:background .2s; }
+#dropzone.over { background:rgba(0,212,255,.04); }
+#dropzone.hidden { display:none; }
+.dzc-box { border:1px dashed rgba(0,212,255,.22); border-radius:16px; padding:52px 60px; display:flex; flex-direction:column; align-items:center; gap:14px; background:rgba(6,13,24,.6); transition:all .2s; }
+#dropzone.over .dzc-box { border-color:var(--accent); background:rgba(0,212,255,.07); }
+.dzc-title { font:700 16px var(--mono); color:#e0f0ff; letter-spacing:.08em; text-transform:uppercase; }
+.dzc-sub   { font:400 10px var(--mono); color:var(--muted); letter-spacing:.12em; text-transform:uppercase; }
+
+/* Results view */
+#resultsView { display:none; flex:1; overflow-y:auto; flex-direction:column; gap:24px; padding:20px 24px; }
+#resultsView.show { display:flex; }
+
+/* PDF section */
+.pdf-section { display:flex; flex-direction:column; gap:16px; }
+.pdf-section-title { font:700 11px var(--mono); color:var(--muted); text-transform:uppercase; letter-spacing:.2em; padding:8px 0 6px; border-bottom:1px solid var(--border); }
+
+/* Page card */
+.page-card { display:flex; gap:0; background:var(--card); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+.page-card-img { width:42%; flex-shrink:0; position:relative; background:var(--navy); border-right:1px solid var(--border); display:flex; align-items:flex-start; }
+.page-card-img img { width:100%; height:100%; object-fit:contain; max-height:420px; }
+.page-label { position:absolute; bottom:0; left:0; right:0; padding:5px 10px; background:rgba(6,13,24,.85); font:600 9px var(--mono); color:var(--muted); text-align:center; letter-spacing:.08em; text-transform:uppercase; }
+.page-card-results { flex:1; padding:16px 18px; display:flex; flex-direction:column; gap:10px; overflow-y:auto; }
+
+/* Status badge */
+.page-status { padding:7px 12px; border-radius:5px; font:700 11px var(--mono); letter-spacing:.05em; }
+.st-ok   { background:rgba(0,200,83,.12);  color:var(--green); border:1px solid rgba(0,200,83,.3); }
+.st-warn { background:rgba(255,107,53,.1); color:var(--warn);  border:1px solid rgba(255,107,53,.3); }
+.st-err  { background:rgba(255,61,87,.1);  color:var(--red);   border:1px solid rgba(255,61,87,.3); }
+
+/* Check list */
+.checks-list { display:flex; flex-direction:column; gap:3px; }
+.check-item { display:flex; gap:6px; align-items:flex-start; padding:4px 0; border-bottom:1px solid rgba(26,42,64,.5); font:400 10px var(--mono); line-height:1.5; }
+.check-item:last-child { border-bottom:none; }
+.chk-icon { flex-shrink:0; font-size:10px; margin-top:1px; }
+.chk-name { color:var(--text); font-weight:600; white-space:nowrap; }
+.chk-obs  { color:var(--muted); flex:1; }
+.chk-resumen { font:400 10px var(--mono); color:var(--accent); padding:6px 8px; background:rgba(0,212,255,.06); border-radius:4px; border-left:2px solid var(--accent); margin-top:4px; }
+.check-error { font:400 11px var(--mono); color:var(--red); padding:10px; background:rgba(255,61,87,.08); border-radius:5px; border:1px solid rgba(255,61,87,.2); }
+
+/* Chart section */
+.chart-section { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:18px 20px; }
+.chart-title { font:700 10px var(--mono); color:var(--muted); text-transform:uppercase; letter-spacing:.2em; margin-bottom:14px; }
+.chart-wrap { position:relative; height:200px; }
+
+/* Heatmap */
+.heatmap-wrap { overflow-x:auto; margin-top:14px; }
+.heatmap-table { border-collapse:collapse; width:100%; font:400 9px var(--mono); }
+.heatmap-table th { padding:4px 8px; text-align:left; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.1em; white-space:nowrap; }
+.heatmap-table td { padding:3px 8px; text-align:center; border:1px solid var(--border); }
+.hm-check-name { text-align:left !important; color:var(--text); white-space:nowrap; font-size:9px; }
+.hm-ok   { background:rgba(0,200,83,.25);  color:#00c853; }
+.hm-fail { background:rgba(255,61,87,.18); color:#ff3d57; }
+
+/* Global metrics */
+.metrics-section { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:18px 20px; }
+.metrics-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:12px; }
+.metric-card { background:var(--navy); border:1px solid var(--border); border-radius:6px; padding:14px 16px; text-align:center; }
+.metric-val { font:600 26px var(--mono); color:var(--accent); }
+.metric-lbl { font:400 9px var(--mono); color:var(--muted); text-transform:uppercase; letter-spacing:.15em; margin-top:3px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width:4px; height:4px; }
+::-webkit-scrollbar-track { background:var(--navy); }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+::-webkit-scrollbar-thumb:hover { background:var(--muted); }
+
+/* ── MODO CLARO ── */
+[data-theme="light"] {
+  --navy:#eef2f7; --blue:#f4f7fb; --accent:#0369a1; --green:#15803d;
+  --bg:#f8fafc; --card:#ffffff; --text:#1e293b; --muted:#64748b; --border:#cbd5e1;
+  --warn:#c2410c; --red:#dc2626;
+}
+[data-theme="light"] body { background:var(--bg); color:var(--text); }
+[data-theme="light"] .hm-ok   { background:rgba(21,128,61,.18);  color:#15803d; }
+[data-theme="light"] .hm-fail { background:rgba(220,38,38,.12);  color:#dc2626; }
+[data-theme="light"] .log-ok  { color:#15803d; }
+[data-theme="light"] .log-err { color:#dc2626; }
+[data-theme="light"] .log-warn{ color:#c2410c; }
+[data-theme="light"] .log-info{ color:#0369a1; }
+[data-theme="light"] .slog    { color:#4a5568; }
+[data-theme="light"] .st-ok   { background:rgba(21,128,61,.1);  color:#15803d; border-color:rgba(21,128,61,.3); }
+[data-theme="light"] .st-warn { background:rgba(194,65,12,.08); color:#c2410c; border-color:rgba(194,65,12,.3); }
+[data-theme="light"] .st-err  { background:rgba(220,38,38,.08); color:#dc2626; border-color:rgba(220,38,38,.3); }
+[data-theme="light"] .chk-resumen { background:rgba(3,105,161,.06); border-left-color:var(--accent); }
+[data-theme="light"] .dot-ok  { background:#15803d; box-shadow:0 0 5px #15803d; }
+[data-theme="light"] .dot-err { background:#dc2626; }
+[data-theme="light"] .page-card-img { background:#e8eef5; }
+[data-theme="light"] #dropzone.over { background:rgba(3,105,161,.04); }
+[data-theme="light"] .dzc-box  { background:rgba(238,242,247,.8); border-color:rgba(3,105,161,.3); }
+[data-theme="light"] .dzc-title { color:#1e293b; }
+[data-theme="light"] .htitle { color:#1e293b; }
+[data-theme="light"] .hsub   { color:#64748b; }
+[data-theme="light"] .btn-cargar { background:#00d4ff; color:#000; }
+[data-theme="light"] .btn-cargar:hover { background:#00bcd4; box-shadow:0 0 20px rgba(0,212,255,.3); }
+[data-theme="light"] .btn-cargar.loaded { background:rgba(0,200,83,.12); color:#00c853; border:1px solid rgba(0,200,83,.28); }
+
+/* Botón exportar Excel */
+.btn-export { width:100%; padding:8px; background:transparent; color:var(--muted); border:1px solid var(--border); border-radius:6px; font:600 10px var(--mono); cursor:pointer; transition:all .15s; text-transform:uppercase; letter-spacing:.08em; display:none; }
+.btn-export:hover { border-color:#15803d; color:#15803d; }
+
+/* ── CONFIG SIDEBAR ── */
+.cfg-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100; display:none; }
+.cfg-overlay.open { display:block; }
+.cfg-panel { position:fixed; top:0; right:0; bottom:0; width:300px; background:var(--navy); border-left:2px solid var(--border); z-index:101; transform:translateX(100%); transition:transform .25s ease; display:flex; flex-direction:column; box-shadow:-8px 0 32px rgba(0,0,0,.35); }
+.cfg-panel.open { transform:translateX(0); }
+.cfg-hdr { padding:16px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+.cfg-hdr-title { font:700 11px var(--mono); color:var(--text); text-transform:uppercase; letter-spacing:.12em; }
+.cfg-close { background:none; border:none; color:var(--muted); cursor:pointer; font-size:15px; line-height:1; padding:2px 4px; transition:color .15s; border-radius:3px; }
+.cfg-close:hover { color:var(--red); }
+.cfg-body { padding:18px; display:flex; flex-direction:column; gap:14px; overflow-y:auto; flex:1; }
+.cfg-note { font:400 10px var(--mono); color:var(--muted); background:var(--blue); border:1px solid var(--border); border-radius:5px; padding:9px 12px; line-height:1.65; }
+.cfg-field { display:flex; flex-direction:column; gap:5px; }
+.cfg-label { font:600 10px var(--mono); color:var(--muted); text-transform:uppercase; letter-spacing:.12em; }
+.cfg-row { display:flex; gap:5px; align-items:center; }
+.cfg-row input, .cfg-field > input { flex:1; width:100%; padding:8px 10px; background:var(--blue); border:1px solid var(--border); border-radius:5px; color:var(--text); font:400 11px var(--mono); outline:none; transition:border-color .15s; }
+.cfg-row input:focus, .cfg-field > input:focus { border-color:var(--accent); }
+.cfg-row input::placeholder, .cfg-field > input::placeholder { color:var(--border); }
+.cfg-eye { background:none; border:1px solid var(--border); border-radius:4px; color:var(--muted); cursor:pointer; padding:5px 8px; font-size:11px; transition:all .15s; flex-shrink:0; }
+.cfg-eye:hover { border-color:var(--accent); color:var(--accent); }
+.cfg-save { width:100%; padding:10px; background:var(--accent); color:#000; border:none; border-radius:6px; font:700 11px var(--mono); cursor:pointer; text-transform:uppercase; letter-spacing:.08em; transition:opacity .15s; margin-top:2px; }
+.cfg-save:hover { opacity:.88; }
+.cfg-msg { font:400 10px var(--mono); text-align:center; min-height:14px; }
+.cfg-msg.ok  { color:var(--green); }
+.cfg-msg.err { color:var(--red); }
+[data-theme="light"] .cfg-panel { box-shadow:-8px 0 32px rgba(0,0,0,.12); }
+
+@media (max-width:768px) {
+  .workspace { flex-direction:column; }
+  .panel-left { width:100%; max-height:42vh; border-right:none; border-bottom:1px solid var(--border); }
+  .page-card { flex-direction:column; }
+  .page-card-img { width:100%; max-height:260px; border-right:none; border-bottom:1px solid var(--border); }
+  .metrics-grid { grid-template-columns:repeat(2,1fr); }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hicon">
+    <svg width="36" height="36" viewBox="0 0 90 105" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <g class="bit-wrap">
+        <polygon class="bit-face" points="45,4 75,28 15,28" fill="rgba(0,212,255,0.22)" stroke="#00d4ff" stroke-width="1.4" stroke-linejoin="round"/>
+        <polygon points="75,28 45,4 82,52" fill="rgba(0,212,255,0.10)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
+        <polygon points="15,28 45,4 8,52" fill="rgba(0,212,255,0.18)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
+        <polygon points="15,28 75,28 82,52 45,68 8,52" fill="rgba(0,212,255,0.07)" stroke="#00d4ff" stroke-width="1.0" stroke-linejoin="round"/>
+        <polygon points="75,28 82,52 62,78" fill="rgba(0,212,255,0.15)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
+        <polygon points="15,28 8,52 28,78" fill="rgba(0,212,255,0.20)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
+        <polygon points="8,52 28,78 45,100 45,68" fill="rgba(0,212,255,0.07)" stroke="rgba(0,212,255,0.35)" stroke-width="0.7" stroke-linejoin="round"/>
+        <polygon points="82,52 62,78 45,100 45,68" fill="rgba(0,212,255,0.12)" stroke="rgba(0,212,255,0.35)" stroke-width="0.7" stroke-linejoin="round"/>
+        <polygon points="28,78 62,78 45,100" fill="rgba(0,212,255,0.14)" stroke="#00d4ff" stroke-width="1.2" stroke-linejoin="round"/>
+        <line class="bit-edge1" x1="15" y1="28" x2="45" y2="4" stroke="#00d4ff" stroke-width="2.4" stroke-linecap="round"/>
+        <line class="bit-edge2" x1="45" y1="4" x2="75" y2="28" stroke="#00d4ff" stroke-width="1.6" stroke-linecap="round"/>
+        <circle class="bit-top" cx="45" cy="4" r="3" fill="#00d4ff"/>
+        <circle class="bit-vtx-mid" cx="15" cy="28" r="1.8" fill="#00d4ff" opacity="0.5"/>
+        <circle class="bit-vtx-mid" cx="75" cy="28" r="1.8" fill="#00d4ff" opacity="0.5"/>
+        <circle class="bit-vtx-mid" cx="8" cy="52" r="1.4" fill="#00d4ff" opacity="0.35"/>
+        <circle class="bit-vtx-mid" cx="82" cy="52" r="1.4" fill="#00d4ff" opacity="0.35"/>
+        <circle class="bit-vtx-bot" cx="45" cy="100" r="2.2" fill="#00d4ff" opacity="0.65"/>
+      </g>
+    </svg>
+  </div>
+  <div>
+    <div class="htitle">VoxelBIM &mdash; Revisor de Planimetría</div>
+    <div class="hsub" id="hsubMotor">Análisis de láminas PDF &middot; Motor: Groq (IA gratuita)</div>
+  </div>
+  <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+    <button class="hback" id="btnTheme" onclick="toggleTheme()" title="Cambiar tema">&#9728; Modo claro</button>
+    <button class="hback" onclick="openConfig()" title="Configurar API Keys">&#9881; API Keys</button>
+    <button class="hback" onclick="window.location.href='/'">&#8592; Volver</button>
+  </div>
+</header>
+
+<div class="workspace">
+
+  <!-- ── PANEL IZQUIERDO ─────────────────────────── -->
+  <div class="panel-left">
+
+    <!-- ZONA SUPERIOR: archivos + DPI + resultados -->
+    <div class="pl-top">
+
+      <!-- Upload -->
+      <div class="pl-section">
+        <div class="sb-title">Archivos PDF</div>
+        <input type="file" id="fi" accept=".pdf" multiple style="display:none" onchange="handleFileInput(this.files)">
+        <button class="btn-cargar" id="btnCargar" onclick="document.getElementById('fi').click()">
+          &#128194;&nbsp; Abrir PDF(s)
+        </button>
+      </div>
+
+      <!-- Lista de PDFs cargados -->
+      <div class="pdf-list" id="pdfList">
+        <div class="pdf-empty" id="pdfEmpty">Sin archivos cargados</div>
+      </div>
+
+      <!-- Resolución -->
+      <div class="pl-section">
+        <div class="sb-title">Resolución</div>
+        <div class="dpi-row">
+          <input type="range" id="dpiSlider" min="72" max="300" step="24" value="150"
+                 oninput="document.getElementById('dpiVal').textContent=this.value+' DPI'">
+          <span class="dpi-val" id="dpiVal">150 DPI</span>
+        </div>
+      </div>
+
+      <!-- Rcards de páginas analizadas -->
+      <div class="res" id="resList">
+        <div class="res-hdr">Páginas analizadas</div>
+      </div>
+
+    </div><!-- /pl-top -->
+
+    <!-- ZONA INFERIOR: análisis + estado + conexiones -->
+    <div class="pl-bottom">
+
+      <!-- Motor -->
+      <div>
+        <div class="sb-title" style="margin-bottom:6px">Motor de análisis</div>
+        <div class="engine-opts">
+          <label class="eopt"><input type="radio" name="motor" value="groq" checked onchange="updateMotorLabel()"> Groq (IA gratuita)</label>
+          <label class="eopt"><input type="radio" name="motor" value="gemini" onchange="updateMotorLabel()"> Gemini</label>
+        </div>
+      </div>
+
+      <!-- Analizar + log + progress -->
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button class="btn-gen" id="btnAnalyze" disabled onclick="analizarPDFs()">
+          &#128269;&nbsp; Analizar todo
+        </button>
+        <div class="sbox" id="logBox">
+          <div class="shdr"><div class="spin" id="spin"></div>&nbsp;Log</div>
+          <div class="slog" id="logContent"></div>
+        </div>
+        <div class="pwrap" id="pwrap"><div class="pbar" id="pbar"></div></div>
+      </div>
+
+      <!-- Conexiones -->
+      <div class="conn-section">
+        <div class="conn-title">API Keys</div>
+        <div class="conn-row"><div class="dot dot-err" id="dotGroq"></div>Groq</div>
+        <div class="conn-row"><div class="dot dot-err" id="dotGemini"></div>Gemini</div>
+      </div>
+
+      <!-- Exportar -->
+      <div>
+        <button class="btn-export" id="btnExport" onclick="exportarExcel()">
+          &#128202;&nbsp; Exportar a Excel
+        </button>
+      </div>
+
+    </div><!-- /pl-bottom -->
+
+  </div><!-- /panel-left -->
+
+  <!-- ── PANEL DERECHO ──────────────────────────── -->
+  <div class="panel-right">
+
+    <!-- Drop zone inicial -->
+    <div id="dropzone"
+         ondragover="dzOver(event)"
+         ondragleave="dzLeave(event)"
+         ondrop="dzDrop(event)"
+         onclick="document.getElementById('fi').click()">
+      <div class="dzc-box">
+        <svg width="64" height="74" viewBox="0 0 90 105" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <g class="bit-wrap">
+            <polygon class="bit-face" points="45,4 75,28 15,28" fill="rgba(0,212,255,0.22)" stroke="#00d4ff" stroke-width="1.4" stroke-linejoin="round"/>
+            <polygon points="75,28 45,4 82,52" fill="rgba(0,212,255,0.10)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
+            <polygon points="15,28 45,4 8,52" fill="rgba(0,212,255,0.18)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
+            <polygon points="15,28 75,28 82,52 45,68 8,52" fill="rgba(0,212,255,0.07)" stroke="#00d4ff" stroke-width="1.0" stroke-linejoin="round"/>
+            <polygon points="75,28 82,52 62,78" fill="rgba(0,212,255,0.15)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
+            <polygon points="15,28 8,52 28,78" fill="rgba(0,212,255,0.20)" stroke="#00d4ff" stroke-width="0.9" stroke-linejoin="round"/>
+            <polygon points="8,52 28,78 45,100 45,68" fill="rgba(0,212,255,0.07)" stroke="rgba(0,212,255,0.35)" stroke-width="0.7" stroke-linejoin="round"/>
+            <polygon points="82,52 62,78 45,100 45,68" fill="rgba(0,212,255,0.12)" stroke="rgba(0,212,255,0.35)" stroke-width="0.7" stroke-linejoin="round"/>
+            <polygon points="28,78 62,78 45,100" fill="rgba(0,212,255,0.14)" stroke="#00d4ff" stroke-width="1.2" stroke-linejoin="round"/>
+            <line class="bit-edge1" x1="15" y1="28" x2="45" y2="4" stroke="#00d4ff" stroke-width="2.4" stroke-linecap="round"/>
+            <line class="bit-edge2" x1="45" y1="4" x2="75" y2="28" stroke="#00d4ff" stroke-width="1.6" stroke-linecap="round"/>
+            <circle class="bit-top" cx="45" cy="4" r="3" fill="#00d4ff"/>
+            <circle class="bit-vtx-mid" cx="15" cy="28" r="1.8" fill="#00d4ff" opacity="0.5"/>
+            <circle class="bit-vtx-mid" cx="75" cy="28" r="1.8" fill="#00d4ff" opacity="0.5"/>
+            <circle class="bit-vtx-mid" cx="8" cy="52" r="1.4" fill="#00d4ff" opacity="0.35"/>
+            <circle class="bit-vtx-mid" cx="82" cy="52" r="1.4" fill="#00d4ff" opacity="0.35"/>
+            <circle class="bit-vtx-bot" cx="45" cy="100" r="2.2" fill="#00d4ff" opacity="0.65"/>
+          </g>
+        </svg>
+        <div class="dzc-title">Revisor de Planimetría</div>
+        <div class="dzc-sub">Arrastra PDFs aquí &middot; o haz clic para abrir</div>
+        <div class="dzc-sub" style="color:rgba(74,96,128,.5);font-size:9px;">Compatible con múltiples archivos</div>
+      </div>
+    </div>
+
+    <!-- Vista de resultados (inyectada por JS) -->
+    <div id="resultsView"></div>
+
+  </div><!-- /panel-right -->
+
+</div><!-- /workspace -->
+
+<footer style="text-align:center;padding:6px 24px;font:400 9px var(--mono);color:var(--muted);border-top:1px solid var(--border);letter-spacing:.08em;flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:8px;">
+  &copy; 2026 VoxelBIM &mdash; Revisor de Planimetría &mdash; MIT License
+  &nbsp;&middot;&nbsp; <span style="opacity:.4;">Carlos Estay Ruggieri</span>
+</footer>
+
+<!-- ── CONFIG SIDEBAR ─────────────────────────────── -->
+<div id="cfgOverlay" class="cfg-overlay" onclick="closeConfig()"></div>
+<div id="cfgPanel" class="cfg-panel">
+  <div class="cfg-hdr">
+    <span class="cfg-hdr-title">&#9881; API Keys</span>
+    <button class="cfg-close" onclick="closeConfig()">&#10005;</button>
+  </div>
+  <div class="cfg-body">
+    <div class="cfg-note">
+      Las claves se guardan en este navegador (localStorage).<br>
+      Si el Worker ya tiene las claves configuradas, estos campos son opcionales — úsalos solo si quieres usar tu propia cuenta.
+    </div>
+
+    <div class="cfg-field">
+      <div class="cfg-label">Groq API Key</div>
+      <div class="cfg-row">
+        <input type="password" id="cfgGroq" placeholder="gsk_…" autocomplete="off" spellcheck="false">
+        <button class="cfg-eye" onclick="togglePwd('cfgGroq',this)" title="Mostrar/ocultar">&#128065;</button>
+      </div>
+    </div>
+
+    <div class="cfg-field">
+      <div class="cfg-label">Gemini API Key</div>
+      <div class="cfg-row">
+        <input type="password" id="cfgGemini" placeholder="AIza…" autocomplete="off" spellcheck="false">
+        <button class="cfg-eye" onclick="togglePwd('cfgGemini',this)" title="Mostrar/ocultar">&#128065;</button>
+      </div>
+    </div>
+
+    <button class="cfg-save" onclick="saveConfig()">Guardar</button>
+    <div id="cfgMsg" class="cfg-msg"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── Config ────────────────────────────────────────────────────────────────────
+// URL del Cloudflare Worker. Actualizar tras el deploy.
+const WORKER_URL = 'https://voxelpdf-worker.YOUR_SUBDOMAIN.workers.dev';
+
+// pdf.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// CHECKS (mismo orden que el Worker)
+const CHECKS = [
+  {id:'vineta_keywords',  nombre:'Viñeta / Carátula'},
+  {id:'vineta_ubicacion', nombre:'Viñeta en zona correcta'},
+  {id:'numero_lamina',    nombre:'Número de lámina'},
+  {id:'escala_numerica',  nombre:'Escala numérica'},
+  {id:'orientacion_norte',nombre:'Orientación / Norte'},
+  {id:'nombres_ambientes',nombre:'Nomenclatura de ambientes'},
+  {id:'cotas_dimensiones',nombre:'Cotas / dimensiones'},
+  {id:'densidad_grafica', nombre:'Grafismo / contenido gráfico'},
+  {id:'densidad_texto',   nombre:'Etiquetas y texto distribuido'},
+  {id:'contenido_central',nombre:'Contenido en zona de dibujo'},
+];
+
+// ── Estado ────────────────────────────────────────────────────────────────────
+let allFiles    = [];
+let lastResults = null;
+let chartInst   = null;
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const dropzone    = document.getElementById('dropzone');
+const resultsView = document.getElementById('resultsView');
+const resList     = document.getElementById('resList');
+const logBox      = document.getElementById('logBox');
+const logContent  = document.getElementById('logContent');
+const pwrap       = document.getElementById('pwrap');
+const pbar        = document.getElementById('pbar');
+const spin        = document.getElementById('spin');
+const dotGroq     = document.getElementById('dotGroq');
+const dotGemini   = document.getElementById('dotGemini');
+const btnAnalyze  = document.getElementById('btnAnalyze');
+const btnExport   = document.getElementById('btnExport');
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+function init() {
+  updateDots();
+}
+
+function updateDots() {
+  dotGroq.className   = localStorage.getItem('vx_groq_key')   ? 'dot dot-ok' : 'dot dot-err';
+  dotGemini.className = localStorage.getItem('vx_gemini_key') ? 'dot dot-ok' : 'dot dot-err';
+}
+
+// ── Log ───────────────────────────────────────────────────────────────────────
+function log(msg, cls = 'info') {
+  logBox.classList.add('show');
+  const d = document.createElement('div');
+  d.className = `log-${cls}`;
+  d.textContent = msg;
+  logContent.appendChild(d);
+  logContent.scrollTop = logContent.scrollHeight;
+}
+
+// ── Archivos ──────────────────────────────────────────────────────────────────
+function handleFileInput(files) { handleFiles(Array.from(files)); }
+
+function handleFiles(files) {
+  const pdfs = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
+  if (!pdfs.length) return;
+
+  const existing = new Set(allFiles.map(f => f.name));
+  pdfs.forEach(f => { if (!existing.has(f.name)) allFiles.push(f); });
+
+  renderPdfList();
+  btnAnalyze.disabled = false;
+
+  const btn = document.getElementById('btnCargar');
+  btn.classList.add('loaded');
+  btn.innerHTML = '&#10003;&nbsp; Agregar más PDF(s)';
+  log(`${allFiles.length} PDF(s) cargado(s)`, 'ok');
+}
+
+function renderPdfList() {
+  const list  = document.getElementById('pdfList');
+  const empty = document.getElementById('pdfEmpty');
+
+  list.querySelectorAll('.pdf-item').forEach(el => el.remove());
+
+  if (!allFiles.length) {
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  allFiles.forEach((f, i) => {
+    const size = f.size < 1024 * 1024
+      ? (f.size / 1024).toFixed(0) + ' KB'
+      : (f.size / 1024 / 1024).toFixed(1) + ' MB';
+
+    const item = document.createElement('div');
+    item.className = 'pdf-item';
+    item.innerHTML =
+      `<span class="pdf-icon">📄</span>` +
+      `<span class="pdf-name" title="${f.name}">${f.name}</span>` +
+      `<span class="pdf-size">${size}</span>` +
+      `<button class="pdf-rm" title="Quitar" onclick="removePdf(${i})">✕</button>`;
+    list.appendChild(item);
+  });
+}
+
+function removePdf(idx) {
+  allFiles.splice(idx, 1);
+  renderPdfList();
+  if (!allFiles.length) {
+    btnAnalyze.disabled = true;
+    const btn = document.getElementById('btnCargar');
+    btn.classList.remove('loaded');
+    btn.innerHTML = '&#128194;&nbsp; Abrir PDF(s)';
+  }
+}
+
+// ── Drag & drop ───────────────────────────────────────────────────────────────
+function dzOver(e)  { e.preventDefault(); dropzone.classList.add('over'); }
+function dzLeave(e) { dropzone.classList.remove('over'); }
+function dzDrop(e)  {
+  e.preventDefault();
+  dropzone.classList.remove('over');
+  handleFiles(Array.from(e.dataTransfer.files));
+}
+
+// ── Motor label ───────────────────────────────────────────────────────────────
+function updateMotorLabel() {
+  const mode = document.querySelector('input[name="motor"]:checked').value;
+  const labels = { groq: 'Groq (IA gratuita)', gemini: 'Gemini' };
+  document.getElementById('hsubMotor').textContent =
+    `Análisis de láminas PDF · Motor: ${labels[mode] || mode}`;
+}
+
+// ── Análisis (pdf.js client-side + Cloudflare Worker) ────────────────────────
+async function analizarPDFs() {
+  if (!allFiles.length) return;
+
+  const engine = document.querySelector('input[name="motor"]:checked').value;
+  const dpi    = parseInt(document.getElementById('dpiSlider').value);
+  const scale  = dpi / 72;
+
+  // Clave personal (opcional — el Worker usa la suya si no se envía)
+  const keyField = engine === 'gemini' ? 'vx_gemini_key' : 'vx_groq_key';
+  const apiKey   = localStorage.getItem(keyField) || '';
+
+  btnAnalyze.disabled = true;
+  spin.classList.add('show');
+  pwrap.classList.add('show');
+  setProgress(5);
+  log(`Analizando ${allFiles.length} PDF(s) · motor: ${engine} · ${dpi} DPI`, 'info');
+
+  // Limpiar estado anterior
+  resList.innerHTML = '<div class="res-hdr">Páginas analizadas</div>';
+  resList.classList.remove('show');
+  resultsView.classList.remove('show');
+  resultsView.innerHTML = '';
+  dropzone.classList.remove('hidden');
+  btnExport.style.display = 'none';
+  lastResults = null;
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+
+  const accResults = [];
+  let totalPages = 0;
+  let processed  = 0;
+
+  try {
+    // Cargar todos los PDFs y contar páginas
+    const pdfDocs = [];
+    for (const file of allFiles) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      pdfDocs.push({ file, pdf });
+      totalPages += pdf.numPages;
+    }
+    log(`${totalPages} página(s) detectadas — iniciando análisis...`, 'ok');
+    setProgress(10);
+
+    for (const { file, pdf } of pdfDocs) {
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        log(`${file.name} — página ${pageNum} / ${pdf.numPages}...`, 'info');
+
+        // Renderizar página a canvas
+        const page     = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale });
+        const canvas   = document.createElement('canvas');
+        canvas.width   = viewport.width;
+        canvas.height  = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+
+        const imageB64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+
+        // Liberar canvas de memoria
+        canvas.width = canvas.height = 0;
+
+        // Enviar al Worker
+        const resp = await fetch(WORKER_URL, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image_b64: imageB64,
+            engine,
+            api_key:  apiKey || undefined,
+            page_num: pageNum,
+            pdf_name: file.name,
+          }),
+        });
+
+        const result = await resp.json();
+        if (result.error) throw new Error(result.error);
+
+        result.img_b64 = imageB64; // guardar para mostrar miniatura
+        accResults.push(result);
+        processed++;
+        setProgress(10 + Math.round((processed / totalPages) * 85));
+
+        const pct = result.pct ?? 0;
+        const cls = pct >= 80 ? 'ok' : pct >= 50 ? 'warn' : 'err';
+        log(`Pág ${pageNum} de "${file.name}" → ${pct}%`, cls);
+      }
+    }
+
+    setProgress(100);
+    lastResults = { results: accResults };
+    log(`Análisis completado: ${accResults.length} página(s)`, 'ok');
+    renderResults(lastResults);
+
+  } catch (e) {
+    log(`Error: ${e.message}`, 'err');
+  } finally {
+    btnAnalyze.disabled = false;
+    spin.classList.remove('show');
+    setTimeout(() => { pwrap.classList.remove('show'); setProgress(0); }, 1400);
+  }
+}
+
+function setProgress(pct) { pbar.style.width = pct + '%'; }
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderResults(data) {
+  const { results } = data;
+  if (!results.length) { log('Sin resultados', 'warn'); return; }
+
+  dropzone.classList.add('hidden');
+  resultsView.classList.add('show');
+  resList.classList.add('show');
+
+  const byPdf = {};
+  results.forEach((r, i) => {
+    (byPdf[r.pdf_name] = byPdf[r.pdf_name] || []).push({...r, _idx: i});
+  });
+
+  const frag = document.createDocumentFragment();
+
+  Object.entries(byPdf).forEach(([pdfName, pages]) => {
+    const section = document.createElement('div');
+    section.className = 'pdf-section';
+
+    const title = document.createElement('div');
+    title.className = 'pdf-section-title';
+    title.textContent = `📄 ${pdfName} — ${pages.length} página(s)`;
+    section.appendChild(title);
+
+    pages.forEach(r => {
+      section.appendChild(buildPageCard(r));
+
+      const pct   = r.pct ?? 0;
+      const color = pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--warn)' : 'var(--red)';
+      const icon  = r.error ? '!' : pct >= 80 ? '✓' : pct >= 50 ? '!' : '✗';
+      const rc = document.createElement('div');
+      rc.className = 'rcard';
+      rc.id = `rc-${r._idx}`;
+      rc.innerHTML = `<div class="racc" style="background:${color}"></div>
+        <div class="rbody">
+          <div class="rname">Pág ${r.pagina} &nbsp;${icon}</div>
+          <div class="rmeta">${pdfName.slice(0,22)}${pdfName.length>22?'…':''} · ${pct}%</div>
+        </div>`;
+      rc.onclick = () => scrollToPage(r._idx);
+      resList.appendChild(rc);
+    });
+
+    if (pages.length > 1) section.appendChild(buildChartSection(pages, pdfName));
+    section.appendChild(buildHeatmapSection(pages));
+    frag.appendChild(section);
+  });
+
+  if (results.length > 0) frag.appendChild(buildGlobalMetrics(results, byPdf));
+
+  resultsView.appendChild(frag);
+
+  document.querySelectorAll('canvas[data-pages]').forEach(canvas => {
+    const pages = JSON.parse(canvas.dataset.pages);
+    initBarChart(canvas, pages);
+  });
+
+  btnExport.style.display = 'block';
+}
+
+// ── Page card ─────────────────────────────────────────────────────────────────
+function buildPageCard(r) {
+  const card = document.createElement('div');
+  card.className = 'page-card';
+  card.id = `page-${r._idx}`;
+
+  const imgDiv = document.createElement('div');
+  imgDiv.className = 'page-card-img';
+  if (r.img_b64) {
+    const img = document.createElement('img');
+    img.src = `data:image/jpeg;base64,${r.img_b64}`;
+    img.alt = `Página ${r.pagina}`;
+    imgDiv.appendChild(img);
+  }
+  const lbl = document.createElement('div');
+  lbl.className = 'page-label';
+  lbl.textContent = `Página ${r.pagina}`;
+  imgDiv.appendChild(lbl);
+  card.appendChild(imgDiv);
+
+  const resDiv = document.createElement('div');
+  resDiv.className = 'page-card-results';
+
+  if (r.error) {
+    resDiv.innerHTML = `<div class="check-error">❌ Error al analizar: ${r.error}</div>`;
+  } else {
+    const pct   = r.pct ?? 0;
+    const stCls = pct >= 80 ? 'st-ok' : pct >= 50 ? 'st-warn' : 'st-err';
+    const stTxt = pct >= 80 ? '✅ APROBADO' : pct >= 50 ? '⚠️ REVISAR' : '❌ RECHAZADO';
+    const statusEl = document.createElement('div');
+    statusEl.className = `page-status ${stCls}`;
+    statusEl.innerHTML = `${stTxt} &nbsp;&nbsp; ${r.aprobados}/${r.total} (${pct}%)`;
+    resDiv.appendChild(statusEl);
+
+    const list = document.createElement('div');
+    list.className = 'checks-list';
+
+    CHECKS.forEach(c => {
+      const v    = r.resultado?.[c.id] || {};
+      const icon = v.presente ? '✅' : '❌';
+      list.appendChild(buildCheckRow(icon, c.nombre, v.observacion || ''));
+    });
+
+    resDiv.appendChild(list);
+
+    if (r.resultado?.resumen) {
+      const res = document.createElement('div');
+      res.className = 'chk-resumen';
+      res.textContent = r.resultado.resumen;
+      resDiv.appendChild(res);
+    }
+  }
+
+  card.appendChild(resDiv);
+  return card;
+}
+
+function buildCheckRow(icon, nombre, obs) {
+  const row = document.createElement('div');
+  row.className = 'check-item';
+  row.innerHTML =
+    `<span class="chk-icon">${icon}</span>` +
+    `<span class="chk-name">${nombre}</span>` +
+    `<span class="chk-obs">${obs}</span>`;
+  return row;
+}
+
+// ── Chart ─────────────────────────────────────────────────────────────────────
+function buildChartSection(pages, pdfName) {
+  const sec = document.createElement('div');
+  sec.className = 'chart-section';
+
+  const title = document.createElement('div');
+  title.className = 'chart-title';
+  title.textContent = 'Puntaje por página — ' + pdfName;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'chart-wrap';
+
+  const canvas = document.createElement('canvas');
+  canvas.dataset.pages = JSON.stringify(pages.map(p => ({ pagina: p.pagina, pct: p.pct || 0 })));
+
+  wrap.appendChild(canvas);
+  sec.appendChild(title);
+  sec.appendChild(wrap);
+  return sec;
+}
+
+function initBarChart(canvas, pages) {
+  const labels = pages.map(p => `Pág ${p.pagina}`);
+  const data   = pages.map(p => p.pct);
+  const cs     = getComputedStyle(document.documentElement);
+  const cGreen = cs.getPropertyValue('--green').trim();
+  const cWarn  = cs.getPropertyValue('--warn').trim();
+  const cRed   = cs.getPropertyValue('--red').trim();
+  const cMuted = cs.getPropertyValue('--muted').trim();
+  const cBorder= cs.getPropertyValue('--border').trim();
+  const cCard  = cs.getPropertyValue('--card').trim();
+  const colors = data.map(v => v >= 80 ? cGreen : v >= 50 ? cWarn : cRed);
+
+  new Chart(canvas, {
+    type: 'bar',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 4, borderSkipped: false }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: { label: ctx => ` ${ctx.raw}%` },
+          backgroundColor: cCard, borderColor: cBorder, borderWidth: 1,
+          titleColor: cMuted, bodyColor: cMuted,
+          titleFont: { family: 'JetBrains Mono', size: 11 },
+          bodyFont:  { family: 'JetBrains Mono', size: 11 },
+        },
+      },
+      scales: {
+        x: { ticks: { color: cMuted, font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: cBorder } },
+        y: { min: 0, max: 100, ticks: { color: cMuted, font: { family: 'JetBrains Mono', size: 10 }, callback: v => v + '%' }, grid: { color: cBorder } },
+      },
+    },
+  });
+}
+
+// ── Heatmap ───────────────────────────────────────────────────────────────────
+function buildHeatmapSection(pages) {
+  const sec = document.createElement('div');
+  sec.className = 'chart-section';
+
+  let html = '<div class="chart-title">Detalle de checks por página</div>';
+  html += '<div class="heatmap-wrap"><table class="heatmap-table"><thead><tr>';
+  html += '<th>Check</th>';
+  pages.forEach(p => { html += `<th>P${p.pagina}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  CHECKS.forEach(c => {
+    html += `<tr><td class="hm-check-name">${c.nombre}</td>`;
+    pages.forEach(p => {
+      const ok = p.resultado?.[c.id]?.presente || false;
+      html += `<td class="${ok ? 'hm-ok' : 'hm-fail'}">${ok ? '●' : '○'}</td>`;
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  sec.innerHTML = html;
+  return sec;
+}
+
+// ── Métricas globales ─────────────────────────────────────────────────────────
+function buildGlobalMetrics(results, byPdf) {
+  const totalPags  = results.length;
+  const aprobadas  = results.filter(r => (r.pct ?? 0) >= 80).length;
+  const revisar    = results.filter(r => { const p = r.pct ?? 0; return p >= 50 && p < 80; }).length;
+  const rechazadas = totalPags - aprobadas - revisar;
+
+  const sec = document.createElement('div');
+  sec.className = 'metrics-section';
+  sec.innerHTML = `
+    <div class="chart-title">Resumen global</div>
+    <div class="metrics-grid">
+      <div class="metric-card"><div class="metric-val">${Object.keys(byPdf).length}</div><div class="metric-lbl">PDFs analizados</div></div>
+      <div class="metric-card"><div class="metric-val">${totalPags}</div><div class="metric-lbl">Páginas totales</div></div>
+      <div class="metric-card"><div class="metric-val" style="color:var(--green)">${aprobadas}</div><div class="metric-lbl">Aprobadas ✅</div></div>
+      <div class="metric-card"><div class="metric-val" style="color:var(--red)">${rechazadas}</div><div class="metric-lbl">Con observaciones</div></div>
+    </div>`;
+  return sec;
+}
+
+// ── Scroll a página ───────────────────────────────────────────────────────────
+function scrollToPage(idx) {
+  document.querySelectorAll('.rcard').forEach(c => c.classList.remove('active'));
+  const rc = document.getElementById(`rc-${idx}`);
+  if (rc) rc.classList.add('active');
+  const card = document.getElementById(`page-${idx}`);
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── Modo claro/oscuro ─────────────────────────────────────────────────────────
+function toggleTheme() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  if (isLight) {
+    document.documentElement.removeAttribute('data-theme');
+    document.getElementById('btnTheme').innerHTML = '&#9728; Modo claro';
+  } else {
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.getElementById('btnTheme').innerHTML = '&#9790; Modo oscuro';
+  }
+}
+
+// ── Exportar a Excel ──────────────────────────────────────────────────────────
+function exportarExcel() {
+  if (!lastResults) return;
+  const { results } = lastResults;
+  const checkList   = CHECKS.map(c => c.nombre);
+  const header      = ['PDF', 'Página', 'Puntaje (%)', 'Aprobados', 'Total', ...checkList];
+  const rows        = [header];
+
+  results.forEach(r => {
+    const checkValues = CHECKS.map(c => r.resultado?.[c.id]?.presente ? 1 : 0);
+    rows.push([r.pdf_name, r.pagina, r.pct ?? 0, r.aprobados ?? 0, r.total ?? 0, ...checkValues]);
+  });
+
+  const byPdf   = {};
+  results.forEach(r => { (byPdf[r.pdf_name] = byPdf[r.pdf_name] || []).push(r); });
+  const sumRows = [['PDF', 'Páginas', 'Aprobadas (≥80%)', 'Revisar (50-79%)', 'Con observaciones (<50%)']];
+  Object.entries(byPdf).forEach(([name, pages]) => {
+    const ap = pages.filter(p => (p.pct ?? 0) >= 80).length;
+    const rv = pages.filter(p => { const v = p.pct ?? 0; return v >= 50 && v < 80; }).length;
+    sumRows.push([name, pages.length, ap, rv, pages.length - ap - rv]);
+  });
+
+  const wb  = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows),    'Resultados');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sumRows), 'Resumen');
+  XLSX.writeFile(wb, 'planimetria_resultados.xlsx');
+  log('Excel exportado ✓', 'ok');
+}
+
+// ── Config sidebar (localStorage) ────────────────────────────────────────────
+function openConfig() {
+  document.getElementById('cfgOverlay').classList.add('open');
+  document.getElementById('cfgPanel').classList.add('open');
+
+  const groq   = localStorage.getItem('vx_groq_key');
+  const gemini = localStorage.getItem('vx_gemini_key');
+  if (groq)   document.getElementById('cfgGroq').placeholder   = groq.slice(0, 8)   + '… (guardada)';
+  if (gemini) document.getElementById('cfgGemini').placeholder = gemini.slice(0, 8) + '… (guardada)';
+}
+
+function closeConfig() {
+  document.getElementById('cfgOverlay').classList.remove('open');
+  document.getElementById('cfgPanel').classList.remove('open');
+  document.getElementById('cfgMsg').textContent = '';
+  document.getElementById('cfgMsg').className   = 'cfg-msg';
+}
+
+function togglePwd(id, btn) {
+  const inp    = document.getElementById(id);
+  const hidden = inp.type === 'password';
+  inp.type     = hidden ? 'text' : 'password';
+  btn.innerHTML= hidden ? '&#128584;' : '&#128065;';
+}
+
+function saveConfig() {
+  const groqVal   = document.getElementById('cfgGroq').value.trim();
+  const geminiVal = document.getElementById('cfgGemini').value.trim();
+  const msg       = document.getElementById('cfgMsg');
+
+  if (!groqVal && !geminiVal) {
+    msg.className   = 'cfg-msg err';
+    msg.textContent = 'Ingresa al menos una clave';
+    return;
+  }
+
+  if (groqVal)   localStorage.setItem('vx_groq_key',   groqVal);
+  if (geminiVal) localStorage.setItem('vx_gemini_key', geminiVal);
+
+  document.getElementById('cfgGroq').value   = '';
+  document.getElementById('cfgGemini').value = '';
+  msg.className   = 'cfg-msg ok';
+  msg.textContent = 'Guardado ✓';
+  updateDots();
+  setTimeout(() => { closeConfig(); }, 1200);
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+(function () {
+  var isLocal = window.location.protocol === 'file:' || window.location.hostname === '127.0.0.1';
+  if (!isLocal && sessionStorage.getItem('ifc_auth') !== '1') {
+    window.location.href = '/';
+  }
+})();
+init();
+</script>
+</body>
+</html>
