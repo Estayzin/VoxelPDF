@@ -599,9 +599,17 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
     <div class="cfg-field">
       <div class="cfg-label">Groq API Key</div>
       <div class="cfg-row">
-        <input type="password" id="cfgGroq" placeholder="gsk_…" autocomplete="off" spellcheck="false">
+        <input type="password" id="cfgGroq" placeholder="gsk_… (opcional)" autocomplete="off" spellcheck="false">
         <button class="cfg-eye" onclick="togglePwd('cfgGroq',this)" title="Mostrar/ocultar">&#128065;</button>
       </div>
+    </div>
+
+    <div class="cfg-field" style="margin-top:6px">
+      <div class="cfg-label">Google Sheets URL <span style="font-weight:400;opacity:.6">(historial)</span></div>
+      <div class="cfg-note" style="margin-bottom:6px;font-size:9px">
+        Despliega <code style="color:var(--accent)">sheets_logger.gs</code> en Google Apps Script y pega la URL aquí para guardar resultados automáticamente.
+      </div>
+      <input type="url" id="cfgSheets" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" spellcheck="false">
     </div>
 
     <button class="cfg-save" onclick="saveConfig()">Guardar</button>
@@ -1045,6 +1053,7 @@ async function analizarPDFs() {
     lastResults = { results: accResults };
     log(`Análisis completado: ${accResults.length} página(s)`, 'ok');
     renderResults(lastResults);
+    enviarASheets(accResults);
 
   } catch (e) {
     log(`Error: ${e.message}`, 'err');
@@ -1599,13 +1608,64 @@ function exportarExcel() {
   log('Excel exportado ✓', 'ok');
 }
 
+// ── Google Sheets logger ──────────────────────────────────────────────────────
+async function enviarASheets(results) {
+  const url = localStorage.getItem('vx_sheets_url');
+  if (!url) return;
+
+  // Agrupar por PDF y calcular resumen
+  const byPdf = {};
+  results.forEach(r => {
+    const name = r.pdf_name || 'sin_nombre';
+    if (!byPdf[name]) byPdf[name] = { paginas_ok: 0, paginas_error: 0, pct_sum: 0, aprobadas: 0, total: 0, checks: {} };
+    const g = byPdf[name];
+    if (r.error) { g.paginas_error++; return; }
+    g.paginas_ok++;
+    g.pct_sum  += r.pct  ?? 0;
+    g.aprobadas += r.aprobados ?? 0;
+    g.total     += r.total     ?? 0;
+    // Agregar checks: si alguna página falla, el PDF falla
+    CHECKS.forEach(c => {
+      const v   = r.resultado?.[c.id];
+      const obs = v?.observacion || '';
+      const val = obs.startsWith('No aplica') ? 'No aplica' : (v?.presente ?? null);
+      if (!(c.id in g.checks)) g.checks[c.id] = val;
+      else if (g.checks[c.id] !== 'No aplica' && val === false) g.checks[c.id] = false;
+    });
+  });
+
+  const pdfs = Object.entries(byPdf).map(([pdf_name, g]) => ({
+    pdf_name,
+    paginas_ok:    g.paginas_ok,
+    paginas_error: g.paginas_error,
+    pct:           g.paginas_ok ? Math.round(g.pct_sum / g.paginas_ok) : 0,
+    aprobadas:     g.aprobadas,
+    total:         g.total,
+    checks:        g.checks,
+  }));
+
+  try {
+    await fetch(url, {
+      method: 'POST',
+      mode:   'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fecha: new Date().toLocaleString('es-CL'), pdfs }),
+    });
+    log('Resultados guardados en Google Sheets ✓', 'ok');
+  } catch (e) {
+    log('No se pudo guardar en Sheets: ' + e.message, 'warn');
+  }
+}
+
 // ── Config sidebar (localStorage) ────────────────────────────────────────────
 function openConfig() {
   document.getElementById('cfgOverlay').classList.add('open');
   document.getElementById('cfgPanel').classList.add('open');
 
-  const groq = localStorage.getItem('vx_groq_key');
-  if (groq) document.getElementById('cfgGroq').placeholder = groq.slice(0, 8) + '… (guardada)';
+  const groq   = localStorage.getItem('vx_groq_key');
+  const sheets = localStorage.getItem('vx_sheets_url');
+  if (groq)   document.getElementById('cfgGroq').placeholder   = groq.slice(0, 8) + '… (guardada)';
+  if (sheets) document.getElementById('cfgSheets').placeholder = sheets.slice(0, 40) + '…';
 }
 
 function closeConfig() {
@@ -1623,18 +1683,21 @@ function togglePwd(id, btn) {
 }
 
 function saveConfig() {
-  const groqVal = document.getElementById('cfgGroq').value.trim();
-  const msg     = document.getElementById('cfgMsg');
+  const groqVal   = document.getElementById('cfgGroq').value.trim();
+  const sheetsVal = document.getElementById('cfgSheets').value.trim();
+  const msg       = document.getElementById('cfgMsg');
 
-  if (!groqVal) {
+  if (!groqVal && !sheetsVal) {
     msg.className   = 'cfg-msg err';
-    msg.textContent = 'Ingresa al menos una clave';
+    msg.textContent = 'Ingresa al menos un valor';
     return;
   }
 
-  if (groqVal) localStorage.setItem('vx_groq_key', groqVal);
+  if (groqVal)   localStorage.setItem('vx_groq_key',   groqVal);
+  if (sheetsVal) localStorage.setItem('vx_sheets_url', sheetsVal);
 
-  document.getElementById('cfgGroq').value = '';
+  document.getElementById('cfgGroq').value   = '';
+  document.getElementById('cfgSheets').value = '';
   msg.className   = 'cfg-msg ok';
   msg.textContent = 'Guardado ✓';
   updateDots();
