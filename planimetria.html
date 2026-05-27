@@ -1230,11 +1230,12 @@ function renderResults(data) {
   if (!results.length) { log('Sin resultados', 'warn'); return; }
 
   dropzone.classList.add('hidden');
+  resultsView.innerHTML = '';
+  resList.querySelectorAll('.rcard').forEach(rc => rc.remove());
   resultsView.classList.add('show');
   resList.classList.add('show');
   const resCount = document.getElementById('resCount');
   if (resCount) resCount.textContent = `${results.length} pág.`;
-  if (document.referrer) document.getElementById('btnVolver').style.display = '';
 
   const byPdf = {};
   results.forEach((r, i) => {
