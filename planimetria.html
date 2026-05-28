@@ -735,9 +735,10 @@ const PALETA_NORMATIVA = {  // reservado para uso futuro
 };
 
 // ── Estado ────────────────────────────────────────────────────────────────────
-let allFiles    = [];
-let lastResults = null;
-let chartInst   = null;
+let allFiles       = [];
+let lastResults    = null;
+let chartInst      = null;
+let fileResultsMap = {}; // { [pdfName]: [pageResults] } — persists across analyses
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const dropzone    = document.getElementById('dropzone');
@@ -792,29 +793,25 @@ function obFinish() {
 
 // ── Clear results only (keeps loaded files) ────────────────────────────────────
 function clearResults() {
+  fileResultsMap = {};
   lastResults = null;
   if (chartInst) { chartInst.destroy(); chartInst = null; }
-  resList.querySelectorAll('.rcard').forEach(rc => rc.remove());
-  resList.classList.remove('show');
   resultsView.classList.remove('show');
   resultsView.innerHTML = '';
-  dropzone.classList.remove('hidden');
   btnExport.style.display = 'none';
-  const rc = document.getElementById('resCount');
-  if (rc) rc.textContent = '';
+  rebuildResList();
 }
 
 // ── Reset session ─────────────────────────────────────────────────────────────
 function resetSession() {
-  allFiles    = [];
-  lastResults = null;
+  allFiles       = [];
+  lastResults    = null;
+  fileResultsMap = {};
 
   // UI estado inicial
   resultsView.innerHTML = '';
   resultsView.classList.remove('show');
-  dropzone.classList.remove('hidden');
-  resList.querySelectorAll('.rcard').forEach(rc => rc.remove());
-  resList.classList.remove('show');
+  rebuildResList();
 
   logContent.innerHTML = '';
   document.getElementById('logBox').classList.add('show');
@@ -859,6 +856,57 @@ function log(msg, cls = 'info') {
   logContent.scrollTop = logContent.scrollHeight;
 }
 
+// ── Rebuild sidebar list ──────────────────────────────────────────────────────
+function rebuildResList() {
+  resList.querySelectorAll('.rcard').forEach(rc => rc.remove());
+  if (!allFiles.length) { resList.classList.remove('show'); return; }
+
+  resList.classList.add('show');
+  dropzone.classList.add('hidden');
+
+  allFiles.forEach(f => {
+    const pages = fileResultsMap[f.name];
+    if (pages && pages.length) {
+      pages.forEach(r => {
+        const pct     = r.pct ?? 0;
+        const color   = r.error ? 'var(--warn)' : pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--warn)' : 'var(--red)';
+        const icon    = r.error ? '⚡' : pct >= 80 ? '✓' : pct >= 50 ? '!' : '✗';
+        const metaTxt = r.error ? `<span style="color:var(--warn)">sin procesar</span>` : pct + '%';
+        const short   = f.name.slice(0, 22) + (f.name.length > 22 ? '…' : '');
+        const rc = document.createElement('div');
+        rc.className = 'rcard';
+        rc.id = `rc-${r._idx}`;
+        rc.innerHTML = `<div class="racc" style="background:${color}"></div>
+          <div class="rbody" style="display:flex;align-items:center;gap:6px;">
+            <div style="flex:1;min-width:0;">
+              <div class="rname">Pág ${r.pagina} &nbsp;${icon}</div>
+              <div class="rmeta">${short} · ${metaTxt}</div>
+            </div>
+            ${r.error ? `<button class="rcard-retry" title="Re-analizar" onclick="event.stopPropagation();reanalyzePage(${r._idx})">↺</button>` : ''}
+          </div>`;
+        rc.querySelector('.rbody').addEventListener('click', () => scrollToPage(r._idx));
+        resList.appendChild(rc);
+      });
+    } else {
+      const short = f.name.slice(0, 24) + (f.name.length > 24 ? '…' : '');
+      const rc = document.createElement('div');
+      rc.className = 'rcard';
+      rc.innerHTML = `<div class="racc" style="background:var(--border)"></div>
+        <div class="rbody" style="display:flex;align-items:center;gap:6px;">
+          <div style="flex:1;min-width:0;">
+            <div class="rname">${short}</div>
+            <div class="rmeta" style="color:var(--muted)">Pendiente de análisis</div>
+          </div>
+        </div>`;
+      resList.appendChild(rc);
+    }
+  });
+
+  const total = Object.values(fileResultsMap).flat().length;
+  const resCount = document.getElementById('resCount');
+  if (resCount) resCount.textContent = total ? `${total} pág.` : '';
+}
+
 // ── Archivos ──────────────────────────────────────────────────────────────────
 function handleFileInput(files) { handleFiles(Array.from(files)); }
 
@@ -869,7 +917,7 @@ function handleFiles(files) {
   const existing = new Set(allFiles.map(f => f.name));
   pdfs.forEach(f => { if (!existing.has(f.name)) allFiles.push(f); });
 
-  renderPdfList();
+  rebuildResList();
   btnAnalyze.disabled = false;
   document.getElementById('btnReset').style.display = '';
 
@@ -922,6 +970,11 @@ function removePdf(idx) {
 
 function handleReplaceInput(files) {
   allFiles = [];
+  fileResultsMap = {};
+  lastResults = null;
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+  resultsView.classList.remove('show');
+  resultsView.innerHTML = '';
   document.getElementById('fi2').value = '';
   handleFiles(Array.from(files));
 }
@@ -971,12 +1024,9 @@ async function analizarPDFs() {
   const estStr = estSec < 60 ? `~${estSec}s` : `~${Math.ceil(estSec/60)} min`;
   log(`Analizando ${allFiles.length} PDF(s) · ${estPages} pág. · tiempo estimado: ${estStr}`, 'info');
 
-  // Limpiar estado anterior
-  resList.innerHTML = `<div class="res-hdr" style="display:flex;align-items:center;gap:6px;"><span style="flex:1">Páginas analizadas</span><span id="resCount" style="font:400 9px var(--mono);color:var(--muted)"></span><button class="pdf-rm" title="Limpiar resultados" onclick="clearResults()">✕</button></div>`;
-  resList.classList.remove('show');
+  // Limpiar vista detalle anterior
   resultsView.classList.remove('show');
   resultsView.innerHTML = '';
-  dropzone.classList.remove('hidden');
   btnExport.style.display = 'none';
   lastResults = null;
   if (chartInst) { chartInst.destroy(); chartInst = null; }
@@ -1304,20 +1354,25 @@ function recalcularPuntaje(resultado) {
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function renderResults(data) {
-  const { results } = data;
+  // Merge incoming results into persistent map (replaces results for those files)
+  const incoming = data.results || data;
+  const newNames = new Set(incoming.map(r => r.pdf_name));
+  newNames.forEach(name => { fileResultsMap[name] = []; });
+  incoming.forEach(r => { fileResultsMap[r.pdf_name].push(r); });
+  const results = Object.values(fileResultsMap).flat();
+  results.forEach((r, i) => r._idx = i);
+  lastResults = { results };
+
   if (!results.length) { log('Sin resultados', 'warn'); return; }
 
   dropzone.classList.add('hidden');
   resultsView.innerHTML = '';
-  resList.querySelectorAll('.rcard').forEach(rc => rc.remove());
   resultsView.classList.add('show');
-  resList.classList.add('show');
-  const resCount = document.getElementById('resCount');
-  if (resCount) resCount.textContent = `${results.length} pág.`;
+  rebuildResList();
 
   const byPdf = {};
-  results.forEach((r, i) => {
-    (byPdf[r.pdf_name] = byPdf[r.pdf_name] || []).push({...r, _idx: i});
+  results.forEach(r => {
+    (byPdf[r.pdf_name] = byPdf[r.pdf_name] || []).push(r);
   });
 
   const frag = document.createDocumentFragment();
@@ -1333,24 +1388,6 @@ function renderResults(data) {
 
     pages.forEach(r => {
       section.appendChild(buildPageCard(r));
-
-      const pct   = r.pct ?? 0;
-      const color = r.error ? 'var(--warn)' : pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--warn)' : 'var(--red)';
-      const icon  = r.error ? '⚡' : pct >= 80 ? '✓' : pct >= 50 ? '!' : '✗';
-      const metaTxt = r.error ? `<span style="color:var(--warn)">sin procesar</span>` : pct+'%';
-      const rc = document.createElement('div');
-      rc.className = 'rcard';
-      rc.id = `rc-${r._idx}`;
-      rc.innerHTML = `<div class="racc" style="background:${color}"></div>
-        <div class="rbody" style="display:flex;align-items:center;gap:6px;">
-          <div style="flex:1;min-width:0;">
-            <div class="rname">Pág ${r.pagina} &nbsp;${icon}</div>
-            <div class="rmeta">${pdfName.slice(0,22)}${pdfName.length>22?'…':''} · ${metaTxt}</div>
-          </div>
-          ${r.error ? `<button class="rcard-retry" title="Re-analizar esta página" onclick="event.stopPropagation();reanalyzePage(${r._idx})">↺</button>` : ''}
-        </div>`;
-      rc.querySelector('.rbody').addEventListener('click', () => scrollToPage(r._idx));
-      resList.appendChild(rc);
     });
 
     if (pages.length > 1) section.appendChild(buildChartSection(pages, pdfName));
