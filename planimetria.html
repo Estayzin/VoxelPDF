@@ -374,7 +374,7 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
           <button class="btn-cargar" id="btnCargar" onclick="document.getElementById('fi').click()">
             &#128194;&nbsp; Abrir PDF(s)
           </button>
-          <button class="btn-cargar btn-otros" id="btnSubirOtros" style="display:none" title="Limpiar lista y subir nuevos PDF(s)" onclick="document.getElementById('fi2').click()">
+          <button class="btn-cargar btn-otros" id="btnSubirOtros" style="display:none" title="Limpiar lista y subir nuevos PDF(s)" onclick="openReplaceDialog()">
             &#8635;&nbsp; Otros
           </button>
         </div>
@@ -968,14 +968,23 @@ function removePdf(idx) {
   }
 }
 
+function openReplaceDialog() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.pdf';
+  input.multiple = true;
+  input.onchange = e => handleReplaceInput(e.target.files);
+  input.click();
+}
+
 function handleReplaceInput(files) {
+  if (!files || !files.length) return;
   allFiles = [];
   fileResultsMap = {};
   lastResults = null;
   if (chartInst) { chartInst.destroy(); chartInst = null; }
   resultsView.classList.remove('show');
   resultsView.innerHTML = '';
-  document.getElementById('fi2').value = '';
   handleFiles(Array.from(files));
 }
 
