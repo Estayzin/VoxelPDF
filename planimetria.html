@@ -499,6 +499,7 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 
 <!-- ── CONTEXT MENU ──────────────────────────────── -->
 <div id="ctxMenu" class="ctx-menu">
+  <div class="ctx-item" id="ctxAnalyze">&#128269; &nbsp;Analizar este</div>
   <div class="ctx-item danger" id="ctxDelete">✕ &nbsp;Eliminar PDF</div>
 </div>
 
@@ -1019,6 +1020,13 @@ function hideCtxMenu() {
   _ctxFile = null;
 }
 
+document.getElementById('ctxAnalyze').addEventListener('click', () => {
+  if (!_ctxFile) return;
+  const name = _ctxFile;
+  hideCtxMenu();
+  analizarArchivo(name);
+});
+
 document.getElementById('ctxDelete').addEventListener('click', () => {
   if (!_ctxFile) return;
   const name = _ctxFile;
@@ -1088,6 +1096,104 @@ function dzDrop(e)  {
 function updateMotorLabel() {
   document.getElementById('hsubMotor').textContent =
     'Análisis de láminas PDF · Motor: Groq (IA gratuita)';
+}
+
+// ── Analizar un solo archivo ──────────────────────────────────────────────────
+async function analizarArchivo(fileName) {
+  const file = allFiles.find(f => f.name === fileName);
+  if (!file) return;
+
+  const dpi    = parseInt(document.getElementById('dpiSlider').value);
+  const scale  = dpi / 72;
+  const apiKey = localStorage.getItem('vx_groq_key') || '';
+
+  btnAnalyze.disabled = true;
+  spin.classList.add('show');
+  pwrap.classList.add('show');
+  setProgress(5);
+
+  const accResults = [];
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    log(`Analizando "${file.name}" · ${pdf.numPages} pág.`, 'info');
+    setProgress(10);
+
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      log(`${file.name} — pág ${pageNum} / ${pdf.numPages}...`, 'info');
+
+      const page     = await pdf.getPage(pageNum);
+      const vp1      = page.getViewport({ scale: 1.0 });
+      const viewport = page.getViewport({ scale });
+      const canvas   = document.createElement('canvas');
+      canvas.width   = viewport.width;
+      canvas.height  = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+
+      const MAX_PIXELS = 33_000_000;
+      let sendCanvas = canvas;
+      if (canvas.width * canvas.height > MAX_PIXELS) {
+        const cs = Math.sqrt(MAX_PIXELS / (canvas.width * canvas.height));
+        sendCanvas = document.createElement('canvas');
+        sendCanvas.width  = Math.floor(canvas.width * cs);
+        sendCanvas.height = Math.floor(canvas.height * cs);
+        sendCanvas.getContext('2d').drawImage(canvas, 0, 0, sendCanvas.width, sendCanvas.height);
+      }
+
+      const imageB64      = sendCanvas.toDataURL('image/jpeg', 0.92).split(',')[1];
+      const textSizeCheck = await detectTextSize(page, vp1.width, vp1.height);
+      if (sendCanvas !== canvas) sendCanvas.width = sendCanvas.height = 0;
+      canvas.width = canvas.height = 0;
+
+      const resp = await fetch(WORKER_URL, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_b64: imageB64, engine: 'groq',
+                               api_key: apiKey || undefined, page_num: pageNum, pdf_name: file.name }),
+      });
+
+      let result;
+      try {
+        result = await resp.json();
+        if (result.error) throw new Error(result.error);
+      } catch (pageErr) {
+        log(`Error pág ${pageNum}: ${pageErr.message}`, 'err');
+        accResults.push({ pdf_name: file.name, pagina: pageNum, error: pageErr.message,
+                          resultado: {}, aprobados: 0, total: 0, pct: 0, img_b64: imageB64,
+                          _fileIdx: allFiles.indexOf(file) });
+        setProgress(10 + Math.round((pageNum / pdf.numPages) * 85));
+        continue;
+      }
+
+      result.resultado.formato_hoja     = detectFormat(vp1.width, vp1.height);
+      result.resultado.tamanio_texto_min = textSizeCheck;
+      const recalc = recalcularPuntaje(result.resultado);
+      result.aprobados = recalc.aprobados;
+      result.total     = recalc.total;
+      result.pct       = recalc.pct;
+      result.img_b64   = imageB64;
+      result._fileIdx  = allFiles.indexOf(file);
+      accResults.push(result);
+
+      const pct = result.pct ?? 0;
+      log(`Pág ${pageNum} → ${pct}%`, pct >= 80 ? 'ok' : pct >= 50 ? 'warn' : 'err');
+      setProgress(10 + Math.round((pageNum / pdf.numPages) * 85));
+    }
+
+    setProgress(100);
+    log(`"${file.name}" completado`, 'ok');
+    renderResults({ results: accResults });
+    enviarASheets(accResults);
+
+  } catch (e) {
+    log(`Error: ${e.message}`, 'err');
+    if (accResults.length) renderResults({ results: accResults });
+  } finally {
+    btnAnalyze.disabled = false;
+    spin.classList.remove('show');
+    setTimeout(() => { pwrap.classList.remove('show'); setProgress(0); }, 1400);
+  }
 }
 
 // ── Análisis (pdf.js client-side + Cloudflare Worker) ────────────────────────
