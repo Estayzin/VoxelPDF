@@ -105,6 +105,12 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 .btn-reset { padding:9px 11px; background:transparent; color:var(--muted); border:1px solid var(--border); border-radius:6px; font:700 12px var(--mono); cursor:pointer; transition:all .15s; flex-shrink:0; line-height:1; }
 .btn-reset:hover { border-color:var(--red); color:var(--red); }
 
+/* Context menu */
+.ctx-menu { position:fixed; z-index:9999; background:var(--card); border:1px solid var(--border); border-radius:6px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,.5); min-width:150px; display:none; }
+.ctx-item  { padding:8px 14px; font:600 10px var(--mono); cursor:pointer; letter-spacing:.05em; display:flex; align-items:center; gap:8px; transition:background .1s; }
+.ctx-item:hover { background:rgba(255,59,48,.1); }
+.ctx-item.danger { color:var(--red); }
+
 /* Log box */
 .sbox { display:none; background:var(--blue); border-radius:6px; overflow:hidden; border:1px solid var(--border); }
 .sbox.show { display:block; }
@@ -490,6 +496,11 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
   &copy; 2026 VoxelBIM &mdash; Revisor de Planimetría &mdash; MIT License
   &nbsp;&middot;&nbsp; <span style="opacity:.4;">Carlos Estay Ruggieri</span>
 </footer>
+
+<!-- ── CONTEXT MENU ──────────────────────────────── -->
+<div id="ctxMenu" class="ctx-menu">
+  <div class="ctx-item danger" id="ctxDelete">✕ &nbsp;Eliminar PDF</div>
+</div>
 
 <!-- ── ONBOARDING MODAL ──────────────────────────── -->
 <div id="obOverlay" class="ob-overlay">
@@ -885,6 +896,7 @@ function rebuildResList() {
             ${r.error ? `<button class="rcard-retry" title="Re-analizar" onclick="event.stopPropagation();reanalyzePage(${r._idx})">↺</button>` : ''}
           </div>`;
         rc.querySelector('.rbody').addEventListener('click', () => scrollToPage(r._idx));
+        rc.addEventListener('contextmenu', e => showCtxMenu(e, f.name));
         resList.appendChild(rc);
       });
     } else {
@@ -898,6 +910,7 @@ function rebuildResList() {
             <div class="rmeta" style="color:var(--muted)">Pendiente de análisis</div>
           </div>
         </div>`;
+      rc.addEventListener('contextmenu', e => showCtxMenu(e, f.name));
       resList.appendChild(rc);
     }
   });
@@ -987,6 +1000,80 @@ function handleReplaceInput(files) {
   resultsView.innerHTML = '';
   handleFiles(Array.from(files));
 }
+
+// ── Context menu ─────────────────────────────────────────────────────────────
+let _ctxFile = null;
+const ctxMenu = document.getElementById('ctxMenu');
+
+function showCtxMenu(e, fileName) {
+  e.preventDefault();
+  e.stopPropagation();
+  _ctxFile = fileName;
+  ctxMenu.style.left = Math.min(e.clientX, window.innerWidth  - 160) + 'px';
+  ctxMenu.style.top  = Math.min(e.clientY, window.innerHeight -  50) + 'px';
+  ctxMenu.style.display = 'block';
+}
+
+function hideCtxMenu() {
+  ctxMenu.style.display = 'none';
+  _ctxFile = null;
+}
+
+document.getElementById('ctxDelete').addEventListener('click', () => {
+  if (!_ctxFile) return;
+  const name = _ctxFile;
+  hideCtxMenu();
+  allFiles = allFiles.filter(f => f.name !== name);
+  delete fileResultsMap[name];
+  // Re-index remaining results
+  const flat = Object.values(fileResultsMap).flat();
+  flat.forEach((r, i) => r._idx = i);
+  lastResults = flat.length ? { results: flat } : null;
+  rebuildResList();
+  // Rebuild detail view if there are still results, otherwise clear it
+  if (flat.length) {
+    resultsView.innerHTML = '';
+    const byPdf = {};
+    flat.forEach(r => { (byPdf[r.pdf_name] = byPdf[r.pdf_name] || []).push(r); });
+    const frag = document.createDocumentFragment();
+    Object.entries(byPdf).forEach(([pdfName, pages]) => {
+      const section = document.createElement('div');
+      section.className = 'pdf-section';
+      const title = document.createElement('div');
+      title.className = 'pdf-section-title';
+      title.textContent = `📄 ${pdfName} — ${pages.length} página(s)`;
+      section.appendChild(title);
+      pages.forEach(r => section.appendChild(buildPageCard(r)));
+      if (pages.length > 1) section.appendChild(buildChartSection(pages, pdfName));
+      if (pages.length > 1) section.appendChild(buildHeatmapSection(pages));
+      frag.appendChild(section);
+    });
+    if (flat.length > 0) frag.appendChild(buildGlobalMetrics(flat, byPdf));
+    resultsView.appendChild(frag);
+    document.querySelectorAll('canvas[data-pages]').forEach(canvas => {
+      initBarChart(canvas, JSON.parse(canvas.dataset.pages));
+    });
+  } else {
+    resultsView.classList.remove('show');
+    resultsView.innerHTML = '';
+    btnExport.style.display = 'none';
+    if (chartInst) { chartInst.destroy(); chartInst = null; }
+  }
+  if (!allFiles.length) {
+    btnAnalyze.disabled = true;
+    const btn = document.getElementById('btnCargar');
+    btn.classList.remove('loaded');
+    btn.innerHTML = '&#128194;&nbsp; Abrir PDF(s)';
+    document.getElementById('btnSubirOtros').style.display = 'none';
+    document.getElementById('btnReset').style.display = 'none';
+    dropzone.classList.remove('hidden');
+  }
+});
+
+document.addEventListener('click', hideCtxMenu);
+document.addEventListener('contextmenu', e => {
+  if (!e.target.closest('.rcard')) hideCtxMenu();
+});
 
 // ── Drag & drop ───────────────────────────────────────────────────────────────
 function dzOver(e)  { e.preventDefault(); dropzone.classList.add('over'); }
