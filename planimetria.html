@@ -635,7 +635,26 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 
 // ── Config ────────────────────────────────────────────────────────────────────
 // URL del Cloudflare Worker. Actualizar tras el deploy.
-const WORKER_URL = 'https://voxelpdf-worker.zinnarox.workers.dev';
+const WORKER_URL    = 'https://voxelpdf-worker.zinnarox.workers.dev';
+const CACHE_VERSION = 'v2'; // incrementar si se cambia el prompt del worker
+
+async function cacheHash(imageB64) {
+  const data = new TextEncoder().encode(imageB64 + '|' + CACHE_VERSION);
+  const buf  = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function getCached(hash) {
+  try { const r = localStorage.getItem('vx_c_' + hash); return r ? JSON.parse(r) : null; }
+  catch { return null; }
+}
+
+function setCached(hash, result) {
+  try {
+    const { img_b64: _, _fileIdx: __, ...toStore } = result;
+    localStorage.setItem('vx_c_' + hash, JSON.stringify(toStore));
+  } catch { /* storage lleno — ignorar */ }
+}
 
 // URL del Google Apps Script logger. El localStorage tiene prioridad si el usuario configura la suya.
 const SHEETS_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbzXcuBxLrpVwDrZpyATvWO_waacz_QPWjiz8LITnant6Ybv9CirI0LWRhHiR1ERqmWOng/exec';
@@ -1146,38 +1165,50 @@ async function analizarArchivo(fileName) {
       if (sendCanvas !== canvas) sendCanvas.width = sendCanvas.height = 0;
       canvas.width = canvas.height = 0;
 
-      const resp = await fetch(WORKER_URL, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_b64: imageB64, engine: 'groq',
-                               api_key: apiKey || undefined, page_num: pageNum, pdf_name: file.name }),
-      });
-
+      // ── Caché ──────────────────────────────────────────────────────────────
+      const hash   = await cacheHash(imageB64);
+      const cached = getCached(hash);
       let result;
-      try {
-        result = await resp.json();
-        if (result.error) throw new Error(result.error);
-      } catch (pageErr) {
-        log(`Error pág ${pageNum}: ${pageErr.message}`, 'err');
-        accResults.push({ pdf_name: file.name, pagina: pageNum, error: pageErr.message,
-                          resultado: {}, aprobados: 0, total: 0, pct: 0, img_b64: imageB64,
-                          _fileIdx: allFiles.indexOf(file) });
-        setProgress(10 + Math.round((pageNum / pdf.numPages) * 85));
-        continue;
+
+      if (cached) {
+        result = { ...cached, img_b64: imageB64, _fileIdx: allFiles.indexOf(file) };
+        const pct = result.pct ?? 0;
+        log(`Pág ${pageNum} → ${pct}% ⚡ caché`, pct >= 80 ? 'ok' : pct >= 50 ? 'warn' : 'err');
+      } else {
+        const resp = await fetch(WORKER_URL, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_b64: imageB64, engine: 'groq',
+                                 api_key: apiKey || undefined, page_num: pageNum, pdf_name: file.name }),
+        });
+
+        try {
+          result = await resp.json();
+          if (result.error) throw new Error(result.error);
+        } catch (pageErr) {
+          log(`Error pág ${pageNum}: ${pageErr.message}`, 'err');
+          accResults.push({ pdf_name: file.name, pagina: pageNum, error: pageErr.message,
+                            resultado: {}, aprobados: 0, total: 0, pct: 0, img_b64: imageB64,
+                            _fileIdx: allFiles.indexOf(file) });
+          setProgress(10 + Math.round((pageNum / pdf.numPages) * 85));
+          continue;
+        }
+
+        result.resultado.formato_hoja     = detectFormat(vp1.width, vp1.height);
+        result.resultado.tamanio_texto_min = textSizeCheck;
+        const recalc = recalcularPuntaje(result.resultado);
+        result.aprobados = recalc.aprobados;
+        result.total     = recalc.total;
+        result.pct       = recalc.pct;
+        result.img_b64   = imageB64;
+        result._fileIdx  = allFiles.indexOf(file);
+        setCached(hash, result);
+
+        const pct = result.pct ?? 0;
+        log(`Pág ${pageNum} → ${pct}%`, pct >= 80 ? 'ok' : pct >= 50 ? 'warn' : 'err');
       }
 
-      result.resultado.formato_hoja     = detectFormat(vp1.width, vp1.height);
-      result.resultado.tamanio_texto_min = textSizeCheck;
-      const recalc = recalcularPuntaje(result.resultado);
-      result.aprobados = recalc.aprobados;
-      result.total     = recalc.total;
-      result.pct       = recalc.pct;
-      result.img_b64   = imageB64;
-      result._fileIdx  = allFiles.indexOf(file);
       accResults.push(result);
-
-      const pct = result.pct ?? 0;
-      log(`Pág ${pageNum} → ${pct}%`, pct >= 80 ? 'ok' : pct >= 50 ? 'warn' : 'err');
       setProgress(10 + Math.round((pageNum / pdf.numPages) * 85));
     }
 
@@ -1282,50 +1313,60 @@ async function analizarPDFs() {
         if (sendCanvas !== canvas) sendCanvas.width = sendCanvas.height = 0;
         canvas.width = canvas.height = 0;
 
-        // Enviar al Worker
-        const resp = await fetch(WORKER_URL, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            image_b64: imageB64,
-            engine,
-            api_key:  apiKey || undefined,
-            page_num: pageNum,
-            pdf_name: file.name,
-          }),
-        });
-
+        // ── Caché ────────────────────────────────────────────────────────────
+        const hash   = await cacheHash(imageB64);
+        const cached = getCached(hash);
         let result;
-        try {
-          result = await resp.json();
-          if (result.error) throw new Error(result.error);
-        } catch (pageErr) {
-          log(`Error pág ${pageNum} de "${file.name}": ${pageErr.message}`, 'err');
-          accResults.push({ pdf_name: file.name, pagina: pageNum, error: pageErr.message,
-                            resultado: {}, aprobados: 0, total: 0, pct: 0, img_b64: imageB64,
-                            _fileIdx: allFiles.indexOf(file) });
-          processed++;
-          setProgress(10 + Math.round((processed / totalPages) * 85));
-          continue;
+
+        if (cached) {
+          result = { ...cached, img_b64: imageB64, _fileIdx: allFiles.indexOf(file) };
+          const pct = result.pct ?? 0;
+          log(`Pág ${pageNum} de "${file.name}" → ${pct}% ⚡ caché`, pct >= 80 ? 'ok' : pct >= 50 ? 'warn' : 'err');
+        } else {
+          // Enviar al Worker
+          const resp = await fetch(WORKER_URL, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              image_b64: imageB64,
+              engine,
+              api_key:  apiKey || undefined,
+              page_num: pageNum,
+              pdf_name: file.name,
+            }),
+          });
+
+          try {
+            result = await resp.json();
+            if (result.error) throw new Error(result.error);
+          } catch (pageErr) {
+            log(`Error pág ${pageNum} de "${file.name}": ${pageErr.message}`, 'err');
+            accResults.push({ pdf_name: file.name, pagina: pageNum, error: pageErr.message,
+                              resultado: {}, aprobados: 0, total: 0, pct: 0, img_b64: imageB64,
+                              _fileIdx: allFiles.indexOf(file) });
+            processed++;
+            setProgress(10 + Math.round((processed / totalPages) * 85));
+            continue;
+          }
+
+          result.resultado.formato_hoja     = detectFormat(vp1.width, vp1.height);
+          result.resultado.tamanio_texto_min = textSizeCheck;
+          const recalc = recalcularPuntaje(result.resultado);
+          result.aprobados = recalc.aprobados;
+          result.total     = recalc.total;
+          result.pct       = recalc.pct;
+          result.img_b64   = imageB64;
+          result._fileIdx  = allFiles.indexOf(file);
+          setCached(hash, result);
+
+          const pct = result.pct ?? 0;
+          const cls = pct >= 80 ? 'ok' : pct >= 50 ? 'warn' : 'err';
+          log(`Pág ${pageNum} de "${file.name}" → ${pct}%`, cls);
         }
 
-        // Inyectar checks client-side y recalcular puntaje
-        result.resultado.formato_hoja     = detectFormat(vp1.width, vp1.height);
-        result.resultado.tamanio_texto_min = textSizeCheck;
-        const recalc = recalcularPuntaje(result.resultado);
-        result.aprobados = recalc.aprobados;
-        result.total     = recalc.total;
-        result.pct       = recalc.pct;
-
-        result.img_b64   = imageB64;
-        result._fileIdx  = allFiles.indexOf(file);
         accResults.push(result);
         processed++;
         setProgress(10 + Math.round((processed / totalPages) * 85));
-
-        const pct = result.pct ?? 0;
-        const cls = pct >= 80 ? 'ok' : pct >= 50 ? 'warn' : 'err';
-        log(`Pág ${pageNum} de "${file.name}" → ${pct}%`, cls);
       }
     }
 
