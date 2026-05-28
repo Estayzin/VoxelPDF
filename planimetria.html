@@ -92,6 +92,14 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 
 .dpi-hint { font:400 9px var(--mono); color:var(--muted); letter-spacing:.04em; margin-top:2px; }
 
+/* Avanzado collapsible */
+.adv-toggle { display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none; padding:8px 16px; border-top:1px solid var(--border); background:transparent; border-bottom:none; border-left:none; border-right:none; width:100%; color:var(--muted); font:600 10px var(--mono); letter-spacing:.08em; text-transform:uppercase; transition:color .15s; }
+.adv-toggle:hover { color:var(--text); }
+.adv-arrow { font-size:10px; transition:transform .2s; }
+.adv-arrow.open { transform:rotate(180deg); }
+.adv-body { overflow:hidden; transition:max-height .25s ease; max-height:0; }
+.adv-body.open { max-height:120px; }
+
 /* Engine radio */
 .engine-opts { display:flex; flex-direction:column; gap:4px; }
 .eopt { display:flex; align-items:center; gap:8px; padding:7px 10px; background:var(--blue); border-radius:4px; border:1px solid var(--border); cursor:pointer; transition:all .15s; font:500 11px var(--mono); color:var(--text); }
@@ -141,6 +149,8 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 .res-hdr { font:700 9px var(--mono); color:var(--muted); text-transform:uppercase; letter-spacing:.2em; padding:14px 0 8px; }
 .rcard { background:var(--card); border-radius:6px; overflow:hidden; margin-bottom:4px; display:flex; align-items:stretch; cursor:pointer; transition:all .15s; border:1px solid var(--border); }
 .rcard:hover { border-color:var(--accent); box-shadow:0 0 10px rgba(0,212,255,.12); transform:translateX(2px); }
+.rcard.analyzing { border-color:rgba(0,212,255,.4); animation:rcard-pulse 1.2s ease-in-out infinite; }
+@keyframes rcard-pulse { 0%,100%{opacity:1} 50%{opacity:.55} }
 .rcard.active { border-color:var(--accent); }
 .racc  { width:3px; align-self:stretch; flex-shrink:0; }
 .rbody { padding:7px 11px; flex:1; min-width:0; }
@@ -381,7 +391,7 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
             &#128194;&nbsp; Abrir PDF(s)
           </button>
           <button class="btn-cargar btn-otros" id="btnSubirOtros" style="display:none" title="Limpiar lista y subir nuevos PDF(s)" onclick="openReplaceDialog()">
-            &#8635;&nbsp; Otros
+            &#8635;&nbsp; Reemplazar
           </button>
         </div>
       </div>
@@ -391,15 +401,20 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
         <div class="pdf-empty" id="pdfEmpty">Sin archivos cargados</div>
       </div>
 
-      <!-- Resolución -->
-      <div class="pl-section">
-        <div class="sb-title">Resolución</div>
-        <div class="dpi-row">
-          <input type="range" id="dpiSlider" min="72" max="216" step="24" value="150"
-                 oninput="document.getElementById('dpiVal').textContent=this.value+' DPI'">
-          <span class="dpi-val" id="dpiVal">150 DPI</span>
+      <!-- Resolución (colapsable) -->
+      <button class="adv-toggle" onclick="toggleAdv(this)" aria-expanded="false">
+        Avanzado <span class="adv-arrow">▼</span>
+      </button>
+      <div class="adv-body" id="advBody">
+        <div class="pl-section">
+          <div class="sb-title">Resolución</div>
+          <div class="dpi-row">
+            <input type="range" id="dpiSlider" min="72" max="216" step="24" value="150"
+                   oninput="document.getElementById('dpiVal').textContent=this.value+' DPI'">
+            <span class="dpi-val" id="dpiVal">150 DPI</span>
+          </div>
+          <div class="dpi-hint">Menor DPI = análisis más rápido · 150 recomendado</div>
         </div>
-        <div class="dpi-hint">Menor DPI = análisis más rápido · 150 recomendado</div>
       </div>
 
       <!-- Rcards de páginas analizadas -->
@@ -769,7 +784,8 @@ const PALETA_NORMATIVA = {  // reservado para uso futuro
 let allFiles       = [];
 let lastResults    = null;
 let chartInst      = null;
-let fileResultsMap = {}; // { [pdfName]: [pageResults] } — persists across analyses
+let fileResultsMap  = {}; // { [pdfName]: [pageResults] } — persists across analyses
+let processingFile  = null; // archivo actualmente en análisis
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const dropzone    = document.getElementById('dropzone');
@@ -894,6 +910,14 @@ function updateDots() {
   document.getElementById('dotGroqLabel').textContent = hasOwn ? 'Groq · clave propia' : 'Groq · Worker';
 }
 
+function toggleAdv(btn) {
+  const body = document.getElementById('advBody');
+  const arrow = btn.querySelector('.adv-arrow');
+  const open = body.classList.toggle('open');
+  arrow.classList.toggle('open', open);
+  btn.setAttribute('aria-expanded', open);
+}
+
 async function pingWorker() {
   try {
     const r = await fetch(WORKER_URL, { method: 'OPTIONS' });
@@ -946,19 +970,23 @@ function rebuildResList() {
             </div>
             ${r.error ? `<button class="rcard-retry" title="Re-analizar" onclick="event.stopPropagation();reanalyzePage(${r._idx})">↺</button>` : ''}
           </div>`;
+        rc.title = 'Clic para ver detalle';
         rc.querySelector('.rbody').addEventListener('click', () => scrollToPage(r._idx));
         rc.addEventListener('contextmenu', e => showCtxMenu(e, f.name));
         resList.appendChild(rc);
       });
     } else {
-      const short = f.name.slice(0, 24) + (f.name.length > 24 ? '…' : '');
+      const short     = f.name.slice(0, 24) + (f.name.length > 24 ? '…' : '');
+      const isActive  = processingFile === f.name;
       const rc = document.createElement('div');
-      rc.className = 'rcard';
-      rc.innerHTML = `<div class="racc" style="background:var(--border)"></div>
+      rc.className = isActive ? 'rcard analyzing' : 'rcard';
+      rc.innerHTML = `<div class="racc" style="background:${isActive ? 'var(--accent)' : 'var(--border)'}"></div>
         <div class="rbody" style="display:flex;align-items:center;gap:6px;">
           <div style="flex:1;min-width:0;">
             <div class="rname">${short}</div>
-            <div class="rmeta" style="color:var(--muted)">Pendiente de análisis</div>
+            <div class="rmeta" style="color:${isActive ? 'var(--accent)' : 'var(--muted)'}">
+              ${isActive ? '⏳ Analizando…' : 'Pendiente de análisis'}
+            </div>
           </div>
         </div>`;
       rc.addEventListener('contextmenu', e => showCtxMenu(e, f.name));
@@ -1177,6 +1205,8 @@ async function analizarArchivo(fileName) {
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     log(`Analizando "${file.name}" · ${pdf.numPages} pág.`, 'info');
+    processingFile = file.name;
+    rebuildResList();
     setProgress(10);
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
@@ -1261,6 +1291,8 @@ async function analizarArchivo(fileName) {
     log(`Error: ${e.message}`, 'err');
     if (accResults.length) renderResults({ results: accResults });
   } finally {
+    processingFile = null;
+    rebuildResList();
     btnAnalyze.disabled = false;
     spin.classList.remove('show');
     setTimeout(() => { pwrap.classList.remove('show'); setProgress(0); }, 1400);
@@ -1321,6 +1353,8 @@ async function analizarPDFs() {
     setProgress(10);
 
     for (const { file, pdf } of pdfDocs) {
+      processingFile = file.name;
+      rebuildResList();
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         log(`${file.name} — página ${pageNum} / ${pdf.numPages}...`, 'info');
 
