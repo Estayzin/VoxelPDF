@@ -179,9 +179,38 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 
 /* Page card */
 .page-card { display:flex; gap:0; background:var(--card); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
-.page-card-img { width:42%; flex-shrink:0; position:relative; background:var(--navy); border-right:1px solid var(--border); display:flex; align-items:flex-start; }
+.page-card-img { width:42%; flex-shrink:0; position:relative; background:var(--navy); border-right:1px solid var(--border); display:flex; align-items:flex-start; cursor:zoom-in; }
 .page-card-img img { width:100%; height:100%; object-fit:contain; max-height:420px; }
 .page-label { position:absolute; bottom:0; left:0; right:0; padding:5px 10px; background:rgba(6,13,24,.85); font:600 9px var(--mono); color:var(--muted); text-align:center; letter-spacing:.08em; text-transform:uppercase; }
+.page-card-img:hover::after { content:'🔍'; position:absolute; top:8px; right:8px; font-size:16px; opacity:.7; }
+
+/* ── LIGHTBOX ── */
+.lb-overlay { position:fixed; inset:0; background:rgba(0,0,0,.82); z-index:300; display:none; }
+.lb-overlay.open { display:flex; }
+.lb-modal { display:flex; width:96vw; height:94vh; margin:auto; background:var(--navy); border:1px solid var(--border); border-radius:10px; overflow:hidden; box-shadow:0 24px 80px rgba(0,0,0,.6); }
+.lb-img-pane { flex:1; background:#000; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; }
+.lb-img-pane img { max-width:100%; max-height:100%; object-fit:contain; }
+.lb-close { position:absolute; top:12px; right:12px; background:rgba(0,0,0,.55); border:1px solid var(--border); color:#fff; border-radius:5px; font:700 13px var(--mono); cursor:pointer; padding:4px 9px; z-index:10; transition:all .15s; }
+.lb-close:hover { background:var(--red); border-color:var(--red); }
+.lb-side { width:340px; flex-shrink:0; display:flex; flex-direction:column; border-left:1px solid var(--border); overflow:hidden; }
+.lb-side-hdr { padding:14px 16px 10px; border-bottom:1px solid var(--border); }
+.lb-side-title { font:700 11px var(--mono); color:var(--text); letter-spacing:.04em; }
+.lb-side-sub   { font:400 9px var(--mono); color:var(--muted); margin-top:2px; }
+.lb-checks { flex:1; overflow-y:auto; padding:8px 14px; display:flex; flex-direction:column; gap:2px; }
+.lb-check { display:flex; align-items:center; gap:7px; padding:5px 6px; border-radius:4px; cursor:pointer; transition:background .1s; border:1px solid transparent; }
+.lb-check:hover { background:rgba(0,212,255,.06); border-color:var(--border); }
+.lb-check-icon { font-size:11px; flex-shrink:0; width:16px; text-align:center; }
+.lb-check-name { font:600 10px var(--mono); color:var(--text); flex:1; }
+.lb-check-obs  { font:400 9px var(--mono); color:var(--muted); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lb-check.overridden { background:rgba(0,212,255,.05); border-color:rgba(0,212,255,.2); }
+.lb-override-hint { font:400 8px var(--mono); color:var(--muted); text-align:center; padding:4px 0; opacity:.5; }
+.lb-comment { border-top:1px solid var(--border); padding:12px 14px; display:flex; flex-direction:column; gap:6px; flex-shrink:0; }
+.lb-comment label { font:600 9px var(--mono); color:var(--muted); text-transform:uppercase; letter-spacing:.12em; }
+.lb-comment textarea { background:var(--blue); border:1px solid var(--border); border-radius:5px; color:var(--text); font:400 10px var(--mono); padding:8px 10px; resize:none; height:68px; outline:none; line-height:1.6; transition:border-color .15s; }
+.lb-comment textarea:focus { border-color:var(--accent); }
+.lb-comment textarea::placeholder { color:var(--border); }
+/* Comentario en tarjeta */
+.card-comment { font:400 10px var(--mono); color:var(--accent); padding:5px 8px; background:rgba(0,212,255,.05); border-radius:4px; border-left:2px solid rgba(0,212,255,.4); margin-top:4px; white-space:pre-wrap; }
 .page-card-results { flex:1; padding:16px 18px; display:flex; flex-direction:column; gap:10px; overflow-y:auto; }
 
 /* Status badge */
@@ -516,6 +545,27 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
 <div id="ctxMenu" class="ctx-menu">
   <div class="ctx-item" id="ctxAnalyze">&#128269; &nbsp;Analizar este</div>
   <div class="ctx-item danger" id="ctxDelete">✕ &nbsp;Eliminar PDF</div>
+</div>
+
+<!-- ── LIGHTBOX ──────────────────────────────────── -->
+<div id="lbOverlay" class="lb-overlay" onclick="lbClickOutside(event)">
+  <div class="lb-modal">
+    <div class="lb-img-pane">
+      <button class="lb-close" onclick="closeLightbox()">✕</button>
+      <img id="lbImg" src="" alt="">
+    </div>
+    <div class="lb-side">
+      <div class="lb-side-hdr">
+        <div class="lb-side-title" id="lbTitle">—</div>
+        <div class="lb-side-sub" id="lbSub">—</div>
+      </div>
+      <div class="lb-checks" id="lbChecks"></div>
+      <div class="lb-comment">
+        <label>Comentario</label>
+        <textarea id="lbCommentTxt" placeholder="Observaciones manuales…" oninput="lbSaveComment()"></textarea>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ── ONBOARDING MODAL ──────────────────────────── -->
@@ -1737,6 +1787,7 @@ function buildPageCard(r) {
     img.src = `data:image/jpeg;base64,${r.img_b64}`;
     img.alt = `Página ${r.pagina}`;
     imgDiv.appendChild(img);
+    imgDiv.addEventListener('click', () => openLightbox(r._idx));
   }
   const lbl = document.createElement('div');
   lbl.className = 'page-label';
@@ -1793,6 +1844,14 @@ function buildPageCard(r) {
       res.className = 'chk-resumen';
       res.textContent = r.resultado.resumen;
       resDiv.appendChild(res);
+    }
+
+    if (r.comentario) {
+      const com = document.createElement('div');
+      com.className = 'card-comment';
+      com.id = `card-comment-${r._idx}`;
+      com.textContent = '💬 ' + r.comentario;
+      resDiv.appendChild(com);
     }
   }
 
@@ -2036,6 +2095,117 @@ async function enviarASheets(results) {
     log('Resultados guardados en Google Sheets ✓', 'ok');
   } catch (e) {
     log('No se pudo guardar en Sheets: ' + e.message, 'warn');
+  }
+}
+
+// ── Lightbox ──────────────────────────────────────────────────────────────────
+let _lbIdx = null;
+
+function openLightbox(idx) {
+  _lbIdx = idx;
+  const r = lastResults?.results[idx];
+  if (!r) return;
+
+  document.getElementById('lbImg').src = `data:image/jpeg;base64,${r.img_b64}`;
+  document.getElementById('lbTitle').textContent = r.pdf_name || 'Sin nombre';
+  document.getElementById('lbSub').textContent   = `Página ${r.pagina} · ${r.pct ?? 0}%`;
+  document.getElementById('lbCommentTxt').value  = r.comentario || '';
+
+  _renderLbChecks(r);
+  document.getElementById('lbOverlay').classList.add('open');
+  document.addEventListener('keydown', _lbKeyDown);
+}
+
+function closeLightbox() {
+  document.getElementById('lbOverlay').classList.remove('open');
+  document.getElementById('lbImg').src = '';
+  document.removeEventListener('keydown', _lbKeyDown);
+  _lbIdx = null;
+}
+
+function lbClickOutside(e) {
+  if (e.target === document.getElementById('lbOverlay')) closeLightbox();
+}
+
+function _lbKeyDown(e) { if (e.key === 'Escape') closeLightbox(); }
+
+function _renderLbChecks(r) {
+  const container = document.getElementById('lbChecks');
+  container.innerHTML = '';
+
+  const hint = document.createElement('div');
+  hint.className = 'lb-override-hint';
+  hint.textContent = 'Clic en un check para cambiar su resultado';
+  container.appendChild(hint);
+
+  CHECKS.filter(c => !c.informativo).forEach(c => {
+    const v        = r.resultado?.[c.id] || {};
+    const obs      = v.observacion || '';
+    if (obs.startsWith('Pendiente')) return;
+    const noAplica = obs.startsWith('No aplica');
+    const override = r.overrides?.[c.id];
+    const presente = override !== undefined ? override : v.presente;
+    const icon     = noAplica ? '❕' : presente ? '✅' : '❌';
+    const isOverridden = override !== undefined && override !== v.presente;
+
+    const row = document.createElement('div');
+    row.className = 'lb-check' + (isOverridden ? ' overridden' : '');
+    row.title = noAplica ? obs : (isOverridden ? 'Modificado manualmente — clic para revertir' : 'Clic para cambiar');
+    row.innerHTML = `<span class="lb-check-icon">${icon}</span>
+      <span class="lb-check-name">${c.nombre}</span>
+      <span class="lb-check-obs">${obs}</span>
+      ${isOverridden ? '<span style="font-size:9px;color:var(--accent);flex-shrink:0">editado</span>' : ''}`;
+
+    if (!noAplica) {
+      row.addEventListener('click', () => lbToggleCheck(c.id, presente));
+    }
+    container.appendChild(row);
+  });
+}
+
+function lbToggleCheck(checkId, currentVal) {
+  const r = lastResults?.results[_lbIdx];
+  if (!r) return;
+  if (!r.overrides) r.overrides = {};
+
+  const original = r.resultado?.[checkId]?.presente;
+  const newVal   = !currentVal;
+
+  if (newVal === original) {
+    delete r.overrides[checkId];
+  } else {
+    r.overrides[checkId] = newVal;
+    r.resultado[checkId].presente = newVal;
+  }
+
+  const recalc = recalcularPuntaje(r.resultado);
+  r.aprobados = recalc.aprobados;
+  r.total     = recalc.total;
+  r.pct       = recalc.pct;
+
+  document.getElementById('lbSub').textContent = `Página ${r.pagina} · ${r.pct}%`;
+  _renderLbChecks(r);
+  renderResults(lastResults);
+}
+
+function lbSaveComment() {
+  const r = lastResults?.results[_lbIdx];
+  if (!r) return;
+  r.comentario = document.getElementById('lbCommentTxt').value.trim();
+
+  const cardCom = document.getElementById(`card-comment-${_lbIdx}`);
+  if (r.comentario) {
+    if (cardCom) {
+      cardCom.textContent = '💬 ' + r.comentario;
+    } else {
+      const el = document.createElement('div');
+      el.className = 'card-comment';
+      el.id = `card-comment-${_lbIdx}`;
+      el.textContent = '💬 ' + r.comentario;
+      document.querySelector(`#page-${_lbIdx} .page-card-results`)?.appendChild(el);
+    }
+  } else if (cardCom) {
+    cardCom.remove();
   }
 }
 
