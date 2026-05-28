@@ -552,7 +552,7 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
   <div class="lb-modal">
     <div class="lb-img-pane" id="lbImgPane">
       <button class="lb-close" onclick="closeLightbox()">✕</button>
-      <img id="lbImg" src="" alt="" style="transform-origin:center center;transition:none;">
+      <img id="lbImg" src="" alt="" style="transform-origin:0 0;transition:none;display:block;margin:auto;">
     </div>
     <div class="lb-side">
       <div class="lb-side-hdr">
@@ -2120,7 +2120,10 @@ let _lbDownX = 0, _lbDownY = 0, _lbDragged = false;
 
 function _lbResetView() {
   _lbScale = 1; _lbTx = 0; _lbTy = 0;
-  document.getElementById('lbImg').style.transform = '';
+  const img = document.getElementById('lbImg');
+  img.style.transform = '';
+  // Con transform-origin:0 0, sin transform la imagen queda en top-left.
+  // CSS del pane ya la centra con flexbox, así que solo limpiamos el transform.
 }
 
 function _applyLbTransform() {
@@ -2131,17 +2134,28 @@ function _applyLbTransform() {
 function _initLbEvents() {
   const pane = document.getElementById('lbImgPane');
 
+  // Zoom centrado en el cursor.
+  // imgRect.left es el borde izquierdo REAL de la imagen ya renderizada (con el
+  // translate actual incluido). El pixel del cursor a distancia (e.clientX - imgRect.left)
+  // del borde izquierdo queda fijo si ajustamos tx así:
+  //   tx_new = tx + (cursor_rel_img) * (1 - newScale / oldScale)
   pane.addEventListener('wheel', e => {
     e.preventDefault();
+    const img = document.getElementById('lbImg');
+    const imgRect = img.getBoundingClientRect();
     const factor = e.deltaY < 0 ? 1.15 : 0.87;
-    _lbScale = Math.min(10, Math.max(0.3, _lbScale * factor));
+    const newScale = Math.min(10, Math.max(0.3, _lbScale * factor));
+    _lbTx += (e.clientX - imgRect.left) * (1 - newScale / _lbScale);
+    _lbTy += (e.clientY - imgRect.top)  * (1 - newScale / _lbScale);
+    _lbScale = newScale;
     _applyLbTransform();
     pane.style.cursor = _lbScale > 1 ? 'grab' : '';
   }, { passive: false });
 
+  // Pan con click izquierdo (arrastrar) o click medio
   pane.addEventListener('mousedown', e => {
     _lbDownX = e.clientX; _lbDownY = e.clientY; _lbDragged = false;
-    if (e.button === 1) {
+    if (e.button === 0 || e.button === 1) {
       e.preventDefault();
       _lbPanning = true;
       _lbPanStartX = e.clientX - _lbTx;
@@ -2160,7 +2174,7 @@ function _initLbEvents() {
   });
 
   pane.addEventListener('mouseup', e => {
-    if (e.button === 1) { _lbPanning = false; pane.style.cursor = _lbScale > 1 ? 'grab' : ''; }
+    if (_lbPanning) { _lbPanning = false; pane.style.cursor = _lbScale > 1 ? 'grab' : ''; }
     if (e.button === 0 && !_lbDragged) closeLightbox();
   });
 
