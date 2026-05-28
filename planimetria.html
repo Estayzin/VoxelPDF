@@ -405,9 +405,9 @@ header { background:var(--navy); padding:16px 24px; min-height:72px; display:fle
       <!-- Rcards de páginas analizadas -->
       <div class="res" id="resList">
         <div class="res-hdr" style="display:flex;align-items:center;gap:6px;">
-          <span style="flex:1">Páginas analizadas</span>
+          <span id="resListTitle" style="flex:1">Archivos cargados</span>
           <span id="resCount" style="font:400 9px var(--mono);color:var(--muted)"></span>
-          <button class="pdf-rm" title="Limpiar resultados" onclick="clearResults()">✕</button>
+          <button id="btnClearResults" class="pdf-rm" title="Limpiar resultados" onclick="clearResults()">✕</button>
         </div>
       </div>
 
@@ -823,7 +823,23 @@ function obFinish() {
 }
 
 // ── Clear results only (keeps loaded files) ────────────────────────────────────
+let _clearPending = false;
+let _clearTimer   = null;
+
 function clearResults() {
+  const btn = document.getElementById('btnClearResults');
+  if (!_clearPending) {
+    _clearPending = true;
+    if (btn) { btn.textContent = '¿?'; btn.style.color = 'var(--warn)'; btn.title = 'Clic de nuevo para confirmar'; }
+    _clearTimer = setTimeout(() => {
+      _clearPending = false;
+      if (btn) { btn.textContent = '✕'; btn.style.color = ''; btn.title = 'Limpiar resultados'; }
+    }, 2500);
+    return;
+  }
+  clearTimeout(_clearTimer);
+  _clearPending = false;
+  if (btn) { btn.textContent = '✕'; btn.style.color = ''; btn.title = 'Limpiar resultados'; }
   fileResultsMap = {};
   lastResults = null;
   if (chartInst) { chartInst.destroy(); chartInst = null; }
@@ -868,6 +884,7 @@ function resetSession() {
 // ── Init ──────────────────────────────────────────────────────────────────────
 function init() {
   updateDots();
+  pingWorker();
   if (!localStorage.getItem('vx_onboarded')) openOnboarding();
 }
 
@@ -875,6 +892,20 @@ function updateDots() {
   const hasOwn = !!localStorage.getItem('vx_groq_key');
   dotGroq.className = hasOwn ? 'dot dot-ok' : 'dot dot-wrk';
   document.getElementById('dotGroqLabel').textContent = hasOwn ? 'Groq · clave propia' : 'Groq · Worker';
+}
+
+async function pingWorker() {
+  try {
+    const r = await fetch(WORKER_URL, { method: 'OPTIONS' });
+    if (r.ok || r.status === 405) {
+      dotGroq.className = 'dot dot-ok';
+      const hasOwn = !!localStorage.getItem('vx_groq_key');
+      document.getElementById('dotGroqLabel').textContent = hasOwn ? 'Groq · clave propia ✓' : 'Groq · Worker ✓';
+    }
+  } catch {
+    dotGroq.className = 'dot dot-err';
+    document.getElementById('dotGroqLabel').textContent = 'Groq · sin conexión';
+  }
 }
 
 // ── Log ───────────────────────────────────────────────────────────────────────
@@ -938,6 +969,15 @@ function rebuildResList() {
   const total = Object.values(fileResultsMap).flat().length;
   const resCount = document.getElementById('resCount');
   if (resCount) resCount.textContent = total ? `${total} pág.` : '';
+
+  const titleEl = document.getElementById('resListTitle');
+  if (titleEl) {
+    const hasResults = total > 0;
+    const hasPending = allFiles.some(f => !fileResultsMap[f.name]?.length);
+    titleEl.textContent = !hasResults ? 'Archivos cargados'
+                        : hasPending  ? 'Archivos · en proceso'
+                        : 'Resultados';
+  }
 }
 
 // ── Archivos ──────────────────────────────────────────────────────────────────
