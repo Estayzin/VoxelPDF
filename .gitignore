@@ -1,5 +1,6 @@
 .env
 worker/.dev.vars
+BUSINESS.md
 __pycache__/
 *.pyc
 *.pyo
