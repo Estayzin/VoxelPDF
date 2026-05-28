@@ -1846,13 +1846,26 @@ function buildPageCard(r) {
       resDiv.appendChild(res);
     }
 
-    if (r.comentario) {
-      const com = document.createElement('div');
-      com.className = 'card-comment';
-      com.id = `card-comment-${r._idx}`;
-      com.textContent = '💬 ' + r.comentario;
-      resDiv.appendChild(com);
-    }
+    // Área de comentario inline
+    const comWrap = document.createElement('div');
+    comWrap.style.cssText = 'margin-top:6px;display:flex;flex-direction:column;gap:4px;';
+
+    const comTxt = document.createElement('textarea');
+    comTxt.placeholder = '💬 Agregar comentario…';
+    comTxt.value = r.comentario || '';
+    comTxt.style.cssText = 'background:var(--blue);border:1px solid var(--border);border-radius:5px;color:var(--text);font:400 10px var(--mono);padding:7px 10px;resize:none;height:52px;outline:none;line-height:1.6;transition:border-color .15s;width:100%;';
+    comTxt.addEventListener('focus',  () => { comTxt.style.borderColor = 'var(--accent)'; });
+    comTxt.addEventListener('blur',   () => { comTxt.style.borderColor = 'var(--border)'; });
+    comTxt.addEventListener('input',  () => {
+      const idx = r._idx;
+      if (lastResults?.results[idx]) {
+        lastResults.results[idx].comentario = comTxt.value.trim();
+        // sync lightbox si está abierto en esta página
+        if (_lbIdx === idx) document.getElementById('lbCommentTxt').value = comTxt.value;
+      }
+    });
+    comWrap.appendChild(comTxt);
+    resDiv.appendChild(comWrap);
   }
 
   card.appendChild(resDiv);
@@ -2191,22 +2204,11 @@ function lbToggleCheck(checkId, currentVal) {
 function lbSaveComment() {
   const r = lastResults?.results[_lbIdx];
   if (!r) return;
-  r.comentario = document.getElementById('lbCommentTxt').value.trim();
-
-  const cardCom = document.getElementById(`card-comment-${_lbIdx}`);
-  if (r.comentario) {
-    if (cardCom) {
-      cardCom.textContent = '💬 ' + r.comentario;
-    } else {
-      const el = document.createElement('div');
-      el.className = 'card-comment';
-      el.id = `card-comment-${_lbIdx}`;
-      el.textContent = '💬 ' + r.comentario;
-      document.querySelector(`#page-${_lbIdx} .page-card-results`)?.appendChild(el);
-    }
-  } else if (cardCom) {
-    cardCom.remove();
-  }
+  const val = document.getElementById('lbCommentTxt').value.trim();
+  r.comentario = val;
+  // sync textarea en la tarjeta si existe
+  const cardTextarea = document.querySelector(`#page-${_lbIdx} textarea`);
+  if (cardTextarea) cardTextarea.value = val;
 }
 
 // ── Config sidebar (localStorage) ────────────────────────────────────────────
