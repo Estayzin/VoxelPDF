@@ -2025,12 +2025,12 @@ function exportarExcel() {
   if (!lastResults) return;
   const { results } = lastResults;
   const checkList   = CHECKS.map(c => c.nombre);
-  const header      = ['PDF', 'Página', 'Puntaje (%)', 'Aprobados', 'Total', ...checkList];
+  const header      = ['PDF', 'Página', 'Puntaje (%)', 'Aprobados', 'Total', ...checkList, 'Comentario'];
   const rows        = [header];
 
   results.forEach(r => {
     const checkValues = CHECKS.map(c => r.resultado?.[c.id]?.presente ? 1 : 0);
-    rows.push([r.pdf_name, r.pagina, r.pct ?? 0, r.aprobados ?? 0, r.total ?? 0, ...checkValues]);
+    rows.push([r.pdf_name, r.pagina, r.pct ?? 0, r.aprobados ?? 0, r.total ?? 0, ...checkValues, r.comentario || '']);
   });
 
   const byPdf   = {};
